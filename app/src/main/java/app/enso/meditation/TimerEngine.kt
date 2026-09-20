@@ -15,6 +15,7 @@ data class EnsoSettings(
     val startGongSound: GongChoice = GongChoice.Root,
     val endGongSound: GongChoice = GongChoice.Bell,
     val middleGongSound: GongChoice = GongChoice.Heart,
+    val showSaying: Boolean = true,
 )
 
 enum class TimerPhase { Idle, Running, Paused }
@@ -31,6 +32,7 @@ data class TimerSnapshot(
     val selectedMs: Long = DEFAULT_DURATION,
     val settings: EnsoSettings = EnsoSettings(),
     val session: Session? = null,
+    val sayingIndex: Int = -1,
 )
 
 data class TimerUiState(
@@ -41,6 +43,7 @@ data class TimerUiState(
     val settings: EnsoSettings = EnsoSettings(),
     val continuous: Boolean = false,
     val storageWarning: Boolean = false,
+    val saying: String = "",
 )
 
 sealed interface TimerEvent {
@@ -77,8 +80,13 @@ class TimerEngine(snapshot: TimerSnapshot = TimerSnapshot(), nowMs: Long = 0) {
         snapshot = snapshot.copy(settings = settings)
     }
 
+    fun refreshSaying() {
+        snapshot = snapshot.copy(sayingIndex = Sayings.next(snapshot.sayingIndex))
+    }
+
     fun start(nowMs: Long): List<TimerEvent> {
         if (snapshot.session != null) return emptyList()
+        refreshSaying()
         snapshot = snapshot.copy(session = Session(snapshot.selectedMs,
             nowMs + snapshot.selectedMs, snapshot.settings.continuousGong))
         return if (snapshot.settings.startGong) listOf(TimerEvent.StartGong) else emptyList()
@@ -110,6 +118,7 @@ class TimerEngine(snapshot: TimerSnapshot = TimerSnapshot(), nowMs: Long = 0) {
             val crossed = (nowMs - session.deadlineMs) / session.intervalMs + 1
             snapshot.copy(session = session.copy(deadlineMs = session.deadlineMs + crossed * session.intervalMs))
         } else snapshot.copy(session = null)
+        if (session.continuous && emit) refreshSaying()
         // A delayed live wake may signal once; never play a catch-up burst.
         return if (emit) listOf(TimerEvent.IntervalCompleted(
             snapshot.settings.endGong, snapshot.settings.vibration)) else emptyList()
@@ -128,6 +137,7 @@ class TimerEngine(snapshot: TimerSnapshot = TimerSnapshot(), nowMs: Long = 0) {
                 else -> TimerPhase.Running },
             settings = snapshot.settings,
             continuous = session?.continuous ?: snapshot.settings.continuousGong,
+            saying = Sayings.all.getOrNull(snapshot.sayingIndex).orEmpty(),
         )
     }
 }

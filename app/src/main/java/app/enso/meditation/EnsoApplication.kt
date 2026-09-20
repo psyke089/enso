@@ -78,6 +78,8 @@ class SessionController(application: Application) {
 
     fun adjustDuration(direction: Int) { scope.launch { mutate { adjustDuration(direction); emptyList() } } }
 
+    suspend fun onLaunch() = mutate { refreshSaying(); emptyList() }
+
     /** Plays a single recording so settings can be chosen by ear; never touches session state. */
     fun previewGong(choice: GongChoice) { audio.play(choice) }
 

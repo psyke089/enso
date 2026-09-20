@@ -35,6 +35,7 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, Paper.toArgb()),
         )
         lifecycleScope.launch {
+            if (savedInstanceState == null) controller.onLaunch()
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 controller.awaitReady()
                 if (controller.state.value.phase != TimerPhase.Idle) {

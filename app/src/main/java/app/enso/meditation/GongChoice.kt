@@ -12,6 +12,7 @@ enum class GongChoice(val resourceName: String, val label: String) {
     Heart("gong_heart", "Heart"),
     Throat("gong_throat", "Throat"),
     ThirdEye("gong_third_eye", "Third Eye"),
+    Crown("gong_crown", "Crown"),
     Bell("gong_bell", "Bell");
 
     fun next(): GongChoice = values()[(ordinal + 1) % values().size]

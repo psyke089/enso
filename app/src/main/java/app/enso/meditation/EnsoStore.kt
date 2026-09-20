@@ -23,6 +23,8 @@ class EnsoStore(private val context: Context) {
     private val startSound = stringPreferencesKey("start_gong_sound")
     private val endSound = stringPreferencesKey("end_gong_sound")
     private val middleSound = stringPreferencesKey("middle_gong_sound")
+    private val showSaying = booleanPreferencesKey("show_saying")
+    private val sayingIndex = intPreferencesKey("saying_index")
     private val interval = longPreferencesKey("session_interval_ms")
     private val deadline = longPreferencesKey("session_deadline_ms")
     private val repeating = booleanPreferencesKey("session_continuous")
@@ -42,7 +44,8 @@ class EnsoStore(private val context: Context) {
                 p[awake] ?: true, p[vibration] ?: false,
                 GongChoice.fromName(p[startSound]) ?: defaults.startGongSound,
                 GongChoice.fromName(p[endSound]) ?: defaults.endGongSound,
-                GongChoice.fromName(p[middleSound]) ?: defaults.middleGongSound), session)
+                GongChoice.fromName(p[middleSound]) ?: defaults.middleGongSound,
+                p[showSaying] ?: true), session, p[sayingIndex] ?: -1)
     }
 
     suspend fun save(snapshot: TimerSnapshot) {
@@ -56,6 +59,8 @@ class EnsoStore(private val context: Context) {
             p[startSound] = snapshot.settings.startGongSound.name
             p[endSound] = snapshot.settings.endGongSound.name
             p[middleSound] = snapshot.settings.middleGongSound.name
+            p[showSaying] = snapshot.settings.showSaying
+            p[sayingIndex] = snapshot.sayingIndex
             val session = snapshot.session
             if (session == null) {
                 p.remove(interval); p.remove(deadline); p.remove(repeating); p.remove(paused); p.remove(boot)

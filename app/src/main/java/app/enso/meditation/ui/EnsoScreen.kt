@@ -3,6 +3,8 @@ package app.enso.meditation.ui
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -10,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
@@ -35,6 +38,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -42,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.enso.meditation.*
+import app.enso.meditation.R
 import app.enso.meditation.ui.theme.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -80,6 +85,7 @@ fun EnsoScreen(
                 Spacer(Modifier.height(if (compact) 4.dp else 20.dp))
                 InkAction(
                     label = when (state.phase) { TimerPhase.Idle -> "Start"; TimerPhase.Running -> "Pause"; TimerPhase.Paused -> "Resume" },
+                    artwork = if (state.phase == TimerPhase.Running) R.drawable.ink_pause else R.drawable.ink_start,
                     enabled = state.ready,
                     onClick = { action(when (state.phase) {
                         TimerPhase.Idle -> SessionAction.Start
@@ -88,19 +94,14 @@ fun EnsoScreen(
                     }) },
                 )
                 Box(Modifier.height(52.dp), contentAlignment = Alignment.Center) {
-                    if (state.phase != TimerPhase.Idle) InkTextAction("Stop", FadedInk, 15.sp) { action(SessionAction.Stop) }
+                    if (state.phase != TimerPhase.Idle) InkAction("Stop", R.drawable.ink_stop,
+                        enabled = state.ready, secondary = true) { action(SessionAction.Stop) }
                 }
                 if (state.storageWarning) Text("Changes could not be saved on this device.",
                     color = Vermilion, fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 24.dp), textAlign = TextAlign.Center)
-                Spacer(Modifier.height(if (compact) 12.dp else 40.dp))
-                Row(verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(bottom = 28.dp)) {
-                    SealAccent(Modifier.size(26.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Text("here and now", fontFamily = FontFamily.Serif, fontSize = 13.sp,
-                        color = FadedInk, letterSpacing = 2.sp)
-                }
+                Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
+                Saying(state.saying, state.ready && state.settings.showSaying)
             }
         }
         AnimatedVisibility(
@@ -115,7 +116,6 @@ fun EnsoScreen(
                         indication = null) { settingsOpen = false })
                 SettingsPanel(
                     settings = state.settings,
-                    phase = state.phase,
                     changeSettings = changeSettings,
                     previewGong = previewGong,
                     onDone = { settingsOpen = false },
@@ -147,28 +147,53 @@ private fun InkSettingsButton(onClick: () -> Unit) {
     }
 }
 
-/** Primary timer action rendered as ink and a single brush underline. */
+/** Generated sumi brush artwork, with a full touch target and spoken action label. */
 @Composable
-private fun InkAction(label: String, enabled: Boolean, onClick: () -> Unit) {
+private fun InkAction(label: String, artwork: Int, enabled: Boolean,
+    secondary: Boolean = false, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    val inkAlpha = when { !enabled -> .32f; pressed -> .6f; else -> 1f }
-    Column(
+    val inkAlpha by animateFloatAsState(
+        when { !enabled -> .32f; pressed -> .5f; secondary -> .65f; else -> .95f },
+        tween(180), label = "control ink")
+    Box(
         modifier = Modifier
-            .widthIn(min = 132.dp).heightIn(min = 56.dp)
+            .size(if (secondary) 52.dp else 64.dp)
             .clip(CircleShape)
-            .clickable(interactionSource = interaction, indication = null, enabled = enabled, onClick = onClick)
-            .padding(horizontal = 22.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled,
+                role = Role.Button, onClickLabel = label, onClick = onClick)
+            .semantics { contentDescription = label },
+        contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontFamily = FontFamily.Serif, fontSize = 26.sp, fontWeight = FontWeight.Normal,
-            letterSpacing = 1.sp, color = Ink.copy(alpha = inkAlpha))
-        Spacer(Modifier.height(7.dp))
-        Canvas(Modifier.width(44.dp).height(2.dp)) {
-            drawLine(Ink.copy(alpha = if (enabled) .5f else .2f),
-                Offset(0f, size.height / 2), Offset(size.width, size.height / 2),
-                size.height, cap = StrokeCap.Round)
+        Image(painterResource(artwork), contentDescription = null,
+            alpha = inkAlpha, modifier = Modifier.fillMaxSize())
+    }
+}
+
+/** Fade through clear paper; no sliding, scaling, or overlapping lines of text. */
+@Composable
+private fun Saying(text: String, visible: Boolean) {
+    AnimatedContent(
+        targetState = if (visible) text else "",
+        transitionSpec = {
+            (fadeIn(tween(650, delayMillis = 450)) togetherWith fadeOut(tween(450))).using(null)
+        },
+        contentAlignment = Alignment.Center,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp)
+            .padding(bottom = 28.dp).heightIn(min = 44.dp),
+        label = "saying fade",
+    ) { saying ->
+        if (saying.isNotEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.widthIn(max = 340.dp)) {
+                SealAccent(Modifier.size(26.dp))
+                Spacer(Modifier.width(12.dp))
+                Text(saying, fontFamily = FontFamily.Serif, fontSize = 14.sp,
+                    lineHeight = 22.sp, textAlign = TextAlign.Center,
+                    color = FadedInk, letterSpacing = .7.sp,
+                    modifier = Modifier.weight(1f, fill = false))
+            }
         }
     }
 }
@@ -271,7 +296,6 @@ private fun DurationZone(direction: Int, selectedMs: Long, adjust: (Int) -> Unit
 @Composable
 private fun SettingsPanel(
     settings: EnsoSettings,
-    phase: TimerPhase,
     changeSettings: ((EnsoSettings) -> EnsoSettings) -> Unit,
     previewGong: (GongChoice) -> Unit,
     onDone: () -> Unit,
@@ -287,7 +311,7 @@ private fun SettingsPanel(
         }
         Text("A little intention", fontFamily = FontFamily.Serif, fontSize = 27.sp,
             modifier = Modifier.padding(top = 18.dp, bottom = 14.dp))
-        Setting("Start Gong", "A sound to begin", settings.startGong,
+        Setting("Start Gong", settings.startGong,
             gong = settings.startGongSound,
             onGong = { choice ->
                 changeSettings { it.copy(startGongSound = choice) }
@@ -295,7 +319,7 @@ private fun SettingsPanel(
             }) { value ->
             changeSettings { it.copy(startGong = value) }
         }
-        Setting("End Gong", "A sound at each interval’s end", settings.endGong,
+        Setting("End Gong", settings.endGong,
             gong = settings.endGongSound,
             onGong = { choice ->
                 changeSettings { it.copy(endGongSound = choice) }
@@ -303,8 +327,7 @@ private fun SettingsPanel(
             }) { value ->
             changeSettings { it.copy(endGong = value) }
         }
-        Setting("Continuous Gong", if (phase == TimerPhase.Idle) "Repeat until you stop"
-            else "Applies to your next meditation", settings.continuousGong,
+        Setting("Continuous Gong", settings.continuousGong,
             gong = settings.middleGongSound,
             gongLabel = "Middle gong",
             onGong = { choice ->
@@ -313,11 +336,14 @@ private fun SettingsPanel(
             }) { value ->
             changeSettings { it.copy(continuousGong = value) }
         }
-        Setting("Keep Screen Awake", "While the timer is running", settings.keepScreenAwake) { value ->
+        Setting("Keep Screen Awake", settings.keepScreenAwake) { value ->
             changeSettings { it.copy(keepScreenAwake = value) }
         }
-        Setting("Vibration", "A gentle touch at each interval’s end", settings.vibration) { value ->
+        Setting("Vibration", settings.vibration) { value ->
             changeSettings { it.copy(vibration = value) }
+        }
+        Setting("Show Saying", settings.showSaying) { value ->
+            changeSettings { it.copy(showSaying = value) }
         }
         Box(Modifier.fillMaxWidth().padding(top = 14.dp), contentAlignment = Alignment.CenterEnd) {
             InkTextAction("Done", Ink, 16.sp, onDone)
@@ -328,7 +354,6 @@ private fun SettingsPanel(
 @Composable
 private fun Setting(
     label: String,
-    description: String,
     checked: Boolean,
     gong: GongChoice? = null,
     gongLabel: String = "Sound",
@@ -338,11 +363,8 @@ private fun Setting(
     Column(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = change)
             .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f).padding(end = 12.dp)) {
-                Text(label, color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif)
-                Text(description, color = FadedInk, fontSize = 12.sp, lineHeight = 17.sp,
-                    modifier = Modifier.padding(top = 3.dp))
-            }
+            Text(label, color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif,
+                modifier = Modifier.weight(1f).padding(end = 12.dp))
             InkToggle(checked)
         }
         if (gong != null && onGong != null) GongPicker(gongLabel, gong, onGong)

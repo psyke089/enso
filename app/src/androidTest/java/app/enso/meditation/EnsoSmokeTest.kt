@@ -24,6 +24,9 @@ class EnsoSmokeTest {
         assertEquals(TimerPhase.Idle, state.phase)
         val original = state
         try {
+            controller.changeSettings { it.copy(showSaying = true) }
+            awaitState { it.settings.showSaying && it.saying.isNotEmpty() }
+            compose.onNodeWithText(state.saying).assertIsDisplayed()
             val direction = if (state.selectedMs == MAX_DURATION) -1 else 1
             val forward = if (direction > 0) "Increase" else "Decrease"
             val backward = if (direction > 0) "Decrease" else "Increase"
@@ -37,23 +40,30 @@ class EnsoSmokeTest {
             compose.onNodeWithText("Done").assertIsDisplayed()
             compose.onNodeWithText("Continuous Gong").performClick()
             awaitState { it.settings.continuousGong != original.settings.continuousGong }
+            compose.onNodeWithText("Show Saying").performClick()
+            awaitState { !it.settings.showSaying }
             compose.onNodeWithText("Vibration").performClick()
             awaitState { it.settings.vibration != original.settings.vibration }
             val saved = runBlocking { EnsoStore(compose.activity).load() }
             assertEquals(state.settings, saved.settings)
             assertEquals(state.selectedMs, saved.selectedMs)
             compose.onNodeWithText("Done").performClick()
+            compose.onNodeWithText(state.saying).assertDoesNotExist()
 
-            compose.onNodeWithText("Start").performClick()
+            compose.onNodeWithContentDescription("Start").performClick()
             awaitState { it.phase == TimerPhase.Running }
+            assertNotEquals(original.saying, state.saying)
+            val runningSaying = state.saying
             val running = state.remainingMs
             compose.onNodeWithContentDescription("Increase meditation duration by 5 minutes").assertDoesNotExist()
             compose.activityRule.scenario.recreate()
             awaitState { it.phase == TimerPhase.Running && it.remainingMs < running }
             assertEquals(original.selectedMs, state.selectedMs)
+            assertEquals(runningSaying, state.saying)
 
-            compose.onNodeWithText("Pause").performClick()
+            compose.onNodeWithContentDescription("Pause").performClick()
             awaitState { it.phase == TimerPhase.Paused }
+            assertEquals(runningSaying, state.saying)
             val paused = state.remainingMs
             compose.onNodeWithText("Paused").assertIsDisplayed()
             compose.onNodeWithContentDescription("Decrease meditation duration by 5 minutes").assertDoesNotExist()
@@ -61,18 +71,19 @@ class EnsoSmokeTest {
             Thread.sleep(1_100)
             assertEquals(paused, state.remainingMs)
             compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-            compose.onNodeWithText("Resume").performClick()
+            compose.onNodeWithContentDescription("Resume").performClick()
             awaitState { it.phase == TimerPhase.Running && it.remainingMs < paused }
+            assertEquals(runningSaying, state.saying)
             compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
             val beforeBackground = state.remainingMs
             Thread.sleep(1_200)
             assertTrue(state.remainingMs < beforeBackground)
             compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-            compose.onNodeWithText("Stop").performClick()
+            compose.onNodeWithContentDescription("Stop").performClick()
             awaitState { it.phase == TimerPhase.Idle }
             assertEquals(original.selectedMs, state.remainingMs)
-            compose.onNodeWithText("Start").assertIsDisplayed()
-            compose.onNodeWithText("Stop").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Start").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Stop").assertDoesNotExist()
             compose.runOnIdle {
                 assertEquals(0, compose.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }

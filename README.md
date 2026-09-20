@@ -1,46 +1,48 @@
-# Enso
+<p align="center">
+  <img src="docs/enso-header.png" alt="A sumi ink enso painted on textured washi paper" width="240">
+</p>
 
-An offline Android meditation timer and interval gong. Kotlin / Compose, minimum Android 7.0 (API 24), package `app.enso.meditation`. [SPEC.md](SPEC.md) is the product specification.
+<h1 align="center">Enso</h1>
 
-Tap the left or right half of the ink circle to subtract or add five minutes. Hold to repeat, with gradually increasing speed. Durations range from five minutes to 24 hours and save after every adjustment. Start, Pause, Resume and Stop share a single screen.
+<p align="center">A quiet, offline meditation timer and interval gong for Android.</p>
 
-The settings sheet contains Start Gong, End Gong, Continuous Gong, Keep Screen Awake and Vibration. Continuous Gong is captured when a session starts; changing it during a session applies to the next meditation. The other preferences apply immediately. Pausing releases both screen-awake behavior and the session CPU wake lock.
+<p align="center">
+  <img src="https://img.shields.io/badge/code_review-none%2C_100%25_vibes-critical" alt="No human review">
+</p>
 
-## Implementation
+<p align="center">
+  <img src="docs/enso-screenshot-idle.png" alt="Enso idle screen: a five minute countdown inside a hand-drawn ink enso on warm paper" width="300">
+</p>
 
-- `TimerEngine.kt` is a deterministic state machine driven by `elapsedRealtime()`. Repeating deadlines advance from previous boundaries, with pauses shifting the remaining deadline. UI refreshes and audio duration cannot accumulate timing drift.
-- `SessionController` owns one engine for the application. Mutations are serialized, and boundary state is saved before audio/vibration side effects. Recomposition and activity recreation never create timer events.
-- `EnsoStore` uses one Preferences DataStore for settings, selected duration and session anchors. It writes on adjustments/transitions/boundaries, not every second. A boot-count check discards sessions after a phone reboot. Restoring consumes past boundaries silently and preserves future interval alignment.
-- `MeditationService` uses one command/tick worker and a quiet foreground notification with Pause/Resume and Stop. It exists only for an active (including paused) session. A partial CPU wake lock is held only while running so ordinary screen-off operation can keep timing. This favors timing reliability over battery use during a long meditation; idle Enso holds no lock and runs no service.
-- Android 14+ declares the [special-use foreground service type](https://developer.android.com/develop/background-work/services/fgs/service-types#special-use), with its timer purpose documented in the manifest. Distribution through an app store may require review of that declaration. Android 13+ asks for notification permission on Start; denial does not block meditation.
-- The UI stays in the warm paper theme regardless of system dark mode. Canvas fallback artwork is static, deterministic and replaceable. Timer text, semantics and controls are real Compose UI. Backup/transfer is disabled; no internet permission, accounts, analytics or remote assets are used.
+Enso is a minimal meditation timer built with Kotlin and Jetpack Compose. It runs entirely offline on Android 7.0+ (API 24), has no internet permission, accounts, analytics or ads, and is specified in [SPEC.md](SPEC.md).
 
-## Assets
+## What it does
 
-The current ink circle, paper fibers, distant ink wash and adaptive launcher icon are original procedural/vector fallbacks. Final painted artwork can replace `ui/InkArtwork.kt` and the launcher resources without affecting interaction or timing. No final commissioned artwork has been supplied.
+- **Set any duration** from 5 minutes to 24 hours. Tap the left or right half of the ink circle to subtract or add 5 minutes; hold to repeat with gradually increasing speed. The duration is saved after every adjustment.
+- **One calm screen** for Start, Pause, Resume and Stop, using hand-drawn sumi ink controls with accessible action labels.
+- **Choose your gongs.** Separate Start, End and Continuous gongs, each pickable from nine bundled bell recordings and previewable in the settings sheet.
+- **Rotating sayings.** Twenty original Zen-inspired lines appear on launch, at the start of each session and at every continuous interval, with a soft fade and never an immediate repeat.
+- **Simple preferences.** Keep Screen Awake, Vibration and Show Saying apply immediately. The gong choice is captured when a session starts and applies to the next one.
 
-**No gong recording is bundled yet.** Playback intentionally does nothing when resources are missing. Supply licensed or original OGG/WAV recordings at:
+## Reliability
 
-- `app/src/main/res/raw/gong_start.ogg`
-- `app/src/main/res/raw/gong_end.ogg`
+Timing is driven by `elapsedRealtime()` rather than wall-clock time, so audio and UI refreshes cannot accumulate drift. Session state is persisted in a single Preferences DataStore and restored exactly across screen-off, activity recreation and process death; a reboot discards it. While a session is running, a quiet foreground notification offers Pause/Resume and Stop, and a partial wake lock keeps timing accurate with the screen off. Pausing releases both. Idle Enso runs no service and holds no lock.
 
-Alternatively, `app/src/main/res/raw/gong.ogg` is the shared fallback for both. WAV uses the same base names. Playback uses alarm audio attributes, transient audio focus, async preparation and cleanup on completion/error/timeout. Verify volume, focus/DND interaction, screen-off playback and the complete decay on a physical device after adding recordings. No placeholder binary sound is fabricated.
-
-## Verification
+## Build and run
 
 ```sh
 ./gradlew testDebugUnitTest lintDebug assembleDebug
-./gradlew assembleDebugAndroidTest
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb shell pm grant app.enso.meditation android.permission.POST_NOTIFICATIONS # API 33+ test device only
-adb shell am instrument -w app.enso.meditation.test/androidx.test.runner.AndroidJUnitRunner
 ```
-
-`TimerEngineTest` and `DurationHoldTest` cover defaults, five-minute steps/bounds, state locking, elapsed-time countdowns, pause/resume/stop, normal and continuous completion, once-only events, 10,000 delayed interval boundaries without drift, restoration, settings and hold cancellation/acceleration. `EnsoSmokeTest` exercises actual Compose controls, DataStore writes, activity recreation and background/foreground transitions on a device. It restores the preferences and duration it changes and leaves the timer idle.
 
 The debug APK is `app/build/outputs/apk/debug/app-debug.apk`. No release signing configuration is supplied.
 
-See [VERIFICATION.md](VERIFICATION.md) for the completed build, test and physical-device checks and their limits.
+`TimerEngineTest` and `DurationHoldTest` cover the timer state machine, boundaries, restoration and 10,000 intervals without drift; `EnsoSmokeTest` exercises the Compose controls, DataStore writes and lifecycle transitions on a device.
 
-Remaining manual coverage: Android 7–12 and 14+ devices, TalkBack, large font sizes, long screen-off/overnight runs and vendor battery restrictions. Android may terminate user-stopped or force-stopped apps; restoration on a later launch cannot recover sounds that were not played. Reboot continuation is intentionally unsupported. Audio cannot be audibly verified until a recording is provided.
+## Assets
+
+The screen uses local washi, ink-circle, seal and landscape artwork. Start/Resume, Pause and Stop are three original PNGs generated with the built-in image generation tool; see [ARTWORK.md](ARTWORK.md) for the prompts and paths. The nine gong recordings are user-supplied MP3s bundled in `app/src/main/res/raw`. Audible quality, focus/DND behaviour and screen-off playback still need checking by ear on a physical device.
+
+## License
+
+[MIT](LICENSE)
