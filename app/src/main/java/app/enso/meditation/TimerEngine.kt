@@ -12,6 +12,9 @@ data class EnsoSettings(
     val continuousGong: Boolean = false,
     val keepScreenAwake: Boolean = true,
     val vibration: Boolean = false,
+    val startGongSound: GongChoice = GongChoice.Root,
+    val endGongSound: GongChoice = GongChoice.Bell,
+    val middleGongSound: GongChoice = GongChoice.Heart,
 )
 
 enum class TimerPhase { Idle, Running, Paused }

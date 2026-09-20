@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_Enso)
         super.onCreate(savedInstanceState)
         notificationRequested = savedInstanceState?.getBoolean("notification_requested") ?: false
         enableEdgeToEdge(
@@ -49,7 +50,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             val state by controller.state.collectAsState()
             EnsoTheme {
-                EnsoScreen(state, controller::adjustDuration, controller::changeSettings) { action ->
+                EnsoScreen(state, controller::adjustDuration, controller::changeSettings,
+                    controller::previewGong) { action ->
                     MeditationService.send(this, action)
                     if (action == SessionAction.Start) requestNotifications()
                 }

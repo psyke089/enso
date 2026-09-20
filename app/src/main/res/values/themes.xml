@@ -8,4 +8,8 @@
         <item name="android:navigationBarColor">@color/paper</item>
         <item name="android:colorAccent">#8E493A</item>
     </style>
+
+    <style name="Theme.Enso.Splash" parent="Theme.Enso">
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
 </resources>

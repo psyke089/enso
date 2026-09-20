@@ -58,9 +58,17 @@ class SessionController(application: Application) {
             publish()
             events.forEach { event ->
                 when (event) {
-                    TimerEvent.StartGong -> audio.play(GongSound.Start)
+                    TimerEvent.StartGong -> audio.play(engine.snapshot.settings.startGongSound)
                     is TimerEvent.IntervalCompleted -> {
-                        if (event.gong) audio.play(GongSound.End)
+                        if (event.gong) {
+                            val settings = engine.snapshot.settings
+                            // A repeating session keeps its session alive, so its boundaries are
+                            // interval gongs; a one-shot session's boundary is the final end gong.
+                            val sound = if (engine.snapshot.session?.continuous == true) {
+                                settings.middleGongSound
+                            } else settings.endGongSound
+                            audio.play(sound)
+                        }
                         if (event.vibrate) audio.vibrate()
                     }
                 }
@@ -69,6 +77,10 @@ class SessionController(application: Application) {
     }
 
     fun adjustDuration(direction: Int) { scope.launch { mutate { adjustDuration(direction); emptyList() } } }
+
+    /** Plays a single recording so settings can be chosen by ear; never touches session state. */
+    fun previewGong(choice: GongChoice) { audio.play(choice) }
+
     fun changeSettings(change: (EnsoSettings) -> EnsoSettings) {
         scope.launch { mutate { updateSettings(change(snapshot.settings)); emptyList() } }
     }
