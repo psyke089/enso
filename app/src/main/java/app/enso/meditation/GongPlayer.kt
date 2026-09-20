@@ -13,8 +13,6 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
 
-enum class GongSound(val resourceName: String) { Start("start_gong"), End("end_gong") }
-
 /** Optional local recordings; missing audio never prevents a meditation. */
 class GongPlayer(private val context: Context) {
     private val manager = context.getSystemService(AudioManager::class.java)
@@ -30,7 +28,7 @@ class GongPlayer(private val context: Context) {
     }
 
     @Suppress("DEPRECATION")
-    fun play(sound: GongSound) {
+    fun play(sound: GongChoice) {
         val id = findResource(sound.resourceName).takeIf { it != 0 } ?: findResource("gong")
         if (id == 0) return
         stop()

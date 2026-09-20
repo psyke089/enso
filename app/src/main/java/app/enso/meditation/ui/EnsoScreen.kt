@@ -52,6 +52,7 @@ fun EnsoScreen(
     state: TimerUiState,
     adjustDuration: (Int) -> Unit,
     changeSettings: ((EnsoSettings) -> EnsoSettings) -> Unit,
+    previewGong: (GongChoice) -> Unit,
     action: (SessionAction) -> Unit,
 ) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -116,6 +117,7 @@ fun EnsoScreen(
                     settings = state.settings,
                     phase = state.phase,
                     changeSettings = changeSettings,
+                    previewGong = previewGong,
                     onDone = { settingsOpen = false },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
@@ -271,6 +273,7 @@ private fun SettingsPanel(
     settings: EnsoSettings,
     phase: TimerPhase,
     changeSettings: ((EnsoSettings) -> EnsoSettings) -> Unit,
+    previewGong: (GongChoice) -> Unit,
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -284,14 +287,30 @@ private fun SettingsPanel(
         }
         Text("A little intention", fontFamily = FontFamily.Serif, fontSize = 27.sp,
             modifier = Modifier.padding(top = 18.dp, bottom = 14.dp))
-        Setting("Start Gong", "A sound to begin", settings.startGong) { value ->
+        Setting("Start Gong", "A sound to begin", settings.startGong,
+            gong = settings.startGongSound,
+            onGong = { choice ->
+                changeSettings { it.copy(startGongSound = choice) }
+                previewGong(choice)
+            }) { value ->
             changeSettings { it.copy(startGong = value) }
         }
-        Setting("End Gong", "A sound at each interval’s end", settings.endGong) { value ->
+        Setting("End Gong", "A sound at each interval’s end", settings.endGong,
+            gong = settings.endGongSound,
+            onGong = { choice ->
+                changeSettings { it.copy(endGongSound = choice) }
+                previewGong(choice)
+            }) { value ->
             changeSettings { it.copy(endGong = value) }
         }
         Setting("Continuous Gong", if (phase == TimerPhase.Idle) "Repeat until you stop"
-            else "Applies to your next meditation", settings.continuousGong) { value ->
+            else "Applies to your next meditation", settings.continuousGong,
+            gong = settings.middleGongSound,
+            gongLabel = "Middle gong",
+            onGong = { choice ->
+                changeSettings { it.copy(middleGongSound = choice) }
+                previewGong(choice)
+            }) { value ->
             changeSettings { it.copy(continuousGong = value) }
         }
         Setting("Keep Screen Awake", "While the timer is running", settings.keepScreenAwake) { value ->
@@ -307,15 +326,54 @@ private fun SettingsPanel(
 }
 
 @Composable
-private fun Setting(label: String, description: String, checked: Boolean, change: (Boolean) -> Unit) {
-    Row(Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = change)
-        .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(label, color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif)
-            Text(description, color = FadedInk, fontSize = 12.sp, lineHeight = 17.sp,
-                modifier = Modifier.padding(top = 3.dp))
+private fun Setting(
+    label: String,
+    description: String,
+    checked: Boolean,
+    gong: GongChoice? = null,
+    gongLabel: String = "Sound",
+    onGong: ((GongChoice) -> Unit)? = null,
+    change: (Boolean) -> Unit,
+) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = change)
+            .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                Text(label, color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif)
+                Text(description, color = FadedInk, fontSize = 12.sp, lineHeight = 17.sp,
+                    modifier = Modifier.padding(top = 3.dp))
+            }
+            InkToggle(checked)
         }
-        InkToggle(checked)
+        if (gong != null && onGong != null) GongPicker(gongLabel, gong, onGong)
+    }
+}
+
+/** Cycles through the available recordings; kept quiet so it never reads as a form control. */
+@Composable
+private fun GongPicker(label: String, choice: GongChoice, onChoice: (GongChoice) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 2.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = FadedInk, fontSize = 12.sp, letterSpacing = 1.sp,
+            modifier = Modifier.weight(1f))
+        PickerArrow("‹", "Previous gong") { onChoice(choice.previous()) }
+        Text(choice.label, color = Ink.copy(alpha = .85f), fontFamily = FontFamily.Serif,
+            fontSize = 15.sp, letterSpacing = .5.sp, textAlign = TextAlign.Center,
+            modifier = Modifier.widthIn(min = 104.dp))
+        PickerArrow("›", "Next gong") { onChoice(choice.next()) }
+    }
+}
+
+@Composable
+private fun PickerArrow(symbol: String, description: String, onClick: () -> Unit) {
+    Box(
+        Modifier.size(40.dp).clip(CircleShape)
+            .clickable(interactionSource = remember { MutableInteractionSource() },
+                indication = null, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(symbol, color = FadedInk, fontSize = 20.sp)
     }
 }
 

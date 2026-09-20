@@ -20,6 +20,9 @@ class EnsoStore(private val context: Context) {
     private val continuous = booleanPreferencesKey("continuous_gong")
     private val awake = booleanPreferencesKey("keep_screen_awake")
     private val vibration = booleanPreferencesKey("vibration")
+    private val startSound = stringPreferencesKey("start_gong_sound")
+    private val endSound = stringPreferencesKey("end_gong_sound")
+    private val middleSound = stringPreferencesKey("middle_gong_sound")
     private val interval = longPreferencesKey("session_interval_ms")
     private val deadline = longPreferencesKey("session_deadline_ms")
     private val repeating = booleanPreferencesKey("session_continuous")
@@ -33,9 +36,13 @@ class EnsoStore(private val context: Context) {
         val currentBoot = bootCount()
         val session = if (currentBoot >= 0 && p[boot] == currentBoot && p[interval] != null && p[deadline] != null)
             Session(p[interval]!!, p[deadline]!!, p[repeating] ?: false, p[paused]) else null
+        val defaults = EnsoSettings()
         return TimerSnapshot(p[duration] ?: DEFAULT_DURATION,
             EnsoSettings(p[start] ?: true, p[end] ?: true, p[continuous] ?: false,
-                p[awake] ?: true, p[vibration] ?: false), session)
+                p[awake] ?: true, p[vibration] ?: false,
+                GongChoice.fromName(p[startSound]) ?: defaults.startGongSound,
+                GongChoice.fromName(p[endSound]) ?: defaults.endGongSound,
+                GongChoice.fromName(p[middleSound]) ?: defaults.middleGongSound), session)
     }
 
     suspend fun save(snapshot: TimerSnapshot) {
@@ -46,6 +53,9 @@ class EnsoStore(private val context: Context) {
             p[continuous] = snapshot.settings.continuousGong
             p[awake] = snapshot.settings.keepScreenAwake
             p[vibration] = snapshot.settings.vibration
+            p[startSound] = snapshot.settings.startGongSound.name
+            p[endSound] = snapshot.settings.endGongSound.name
+            p[middleSound] = snapshot.settings.middleGongSound.name
             val session = snapshot.session
             if (session == null) {
                 p.remove(interval); p.remove(deadline); p.remove(repeating); p.remove(paused); p.remove(boot)
