@@ -8,6 +8,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/vibe_coded-100%25-critical?logo=codeberg&logoColor=white" alt="No human review">
+  <img src="https://img.shields.io/badge/human_review-none-green?logo=codeberg&logoColor=white" alt="Human review: none">
 </p>
 
 <p align="center">
