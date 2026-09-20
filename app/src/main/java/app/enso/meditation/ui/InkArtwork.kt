@@ -7,12 +7,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import app.enso.meditation.R
 import app.enso.meditation.ui.theme.Paper
+import app.enso.meditation.ui.theme.WashiTint
 
 /**
  * Decorative paper-and-ink assets. These are the real artwork supplied for Enso;
@@ -29,6 +31,7 @@ fun WashiBackground(modifier: Modifier = Modifier) {
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize().alpha(0.94f),
         )
+        Box(Modifier.fillMaxSize().background(WashiTint.copy(alpha = 0.12f)))
         Box(
             Modifier.fillMaxSize().background(
                 Brush.verticalGradient(
@@ -43,6 +46,9 @@ fun WashiBackground(modifier: Modifier = Modifier) {
     }
 }
 
+/** Rotates the supplied brush so its opening sits toward the top-left. */
+private const val ENSO_ROTATION_DEGREES = 154f
+
 /** The hand-painted Enso brush circle. The timer is laid over its empty center. */
 @Composable
 fun EnsoArtwork(modifier: Modifier = Modifier, paused: Boolean = false) {
@@ -51,7 +57,7 @@ fun EnsoArtwork(modifier: Modifier = Modifier, paused: Boolean = false) {
         contentDescription = null,
         contentScale = ContentScale.Fit,
         alpha = if (paused) 0.55f else 0.92f,
-        modifier = modifier,
+        modifier = modifier.rotate(ENSO_ROTATION_DEGREES),
     )
 }
 
