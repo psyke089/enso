@@ -7,7 +7,7 @@
 <p align="center">A quiet, offline meditation timer and interval gong for Android.</p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/code_review-none%2C_100%25_vibes-critical?logo=codeberg&logoColor=white" alt="No human review">
+  <img src="https://img.shields.io/badge/vibe_coded-100%25-critical?logo=codeberg&logoColor=white" alt="No human review">
 </p>
 
 <p align="center">
