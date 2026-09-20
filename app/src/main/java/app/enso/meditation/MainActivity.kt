@@ -27,6 +27,7 @@ class MainActivity : ComponentActivity() {
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.Theme_Enso)
         super.onCreate(savedInstanceState)
         notificationRequested = savedInstanceState?.getBoolean("notification_requested") ?: false
         enableEdgeToEdge(

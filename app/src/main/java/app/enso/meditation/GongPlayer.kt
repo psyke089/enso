@@ -13,7 +13,7 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Log
 
-enum class GongSound(val resourceName: String) { Start("gong_start"), End("gong_end") }
+enum class GongSound(val resourceName: String) { Start("start_gong"), End("end_gong") }
 
 /** Optional local recordings; missing audio never prevents a meditation. */
 class GongPlayer(private val context: Context) {
