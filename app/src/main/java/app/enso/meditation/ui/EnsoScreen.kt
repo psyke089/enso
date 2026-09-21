@@ -71,16 +71,14 @@ fun EnsoScreen(
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically) {
-                    Text("enso", fontFamily = FontFamily.Serif, fontSize = 28.sp,
-                        letterSpacing = 5.sp, color = Ink, modifier = Modifier.weight(1f))
                     InkSettingsButton { settingsOpen = true }
                 }
                 Spacer(Modifier.height(topSpace))
                 TimerCircle(state, adjustDuration, Modifier.size(circleSize))
                 Box(Modifier.height(36.dp), contentAlignment = Alignment.Center) {
-                    if (state.continuous) Text("∞  Continuous Gong", color = FadedInk,
-                        fontSize = 12.sp, letterSpacing = .5.sp)
+                    if (state.continuous) Text("∞", color = FadedInk, fontSize = 22.sp)
                 }
                 Spacer(Modifier.height(if (compact) 4.dp else 20.dp))
                 InkAction(
@@ -198,26 +196,6 @@ private fun Saying(text: String, visible: Boolean) {
     }
 }
 
-/** Quiet secondary action: a word that behaves like a link painted in ink. */
-@Composable
-private fun InkTextAction(label: String, color: androidx.compose.ui.graphics.Color, size: androidx.compose.ui.unit.TextUnit, onClick: () -> Unit) {
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    Text(
-        text = label,
-        color = color.copy(alpha = if (pressed) .55f else 1f),
-        fontSize = size,
-        letterSpacing = 1.sp,
-        modifier = Modifier
-            .clip(CircleShape)
-            .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-            .widthIn(min = 96.dp).heightIn(min = 48.dp)
-            .wrapContentHeight(Alignment.CenterVertically)
-            .padding(horizontal = 16.dp),
-        textAlign = TextAlign.Center,
-    )
-}
-
 @Composable
 private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit, modifier: Modifier) {
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
@@ -241,13 +219,6 @@ private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit, modi
             Row(Modifier.fillMaxSize().clip(CircleShape)) {
                 DurationZone(-1, state.selectedMs, adjustDuration, Modifier.weight(1f).fillMaxHeight())
                 DurationZone(1, state.selectedMs, adjustDuration, Modifier.weight(1f).fillMaxHeight())
-            }
-            Row(Modifier.fillMaxWidth().offset(y = 52.dp).padding(horizontal = maxWidth * .19f),
-                horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("−", fontSize = 18.sp, color = FadedInk.copy(alpha = .7f),
-                    modifier = Modifier.clearAndSetSemantics { })
-                Text("+", fontSize = 18.sp, color = FadedInk.copy(alpha = .7f),
-                    modifier = Modifier.clearAndSetSemantics { })
             }
         }
     }
@@ -309,31 +280,41 @@ private fun SettingsPanel(
             drawLine(Ink.copy(alpha = .45f), Offset(0f, size.height / 2),
                 Offset(size.width, size.height / 2), 1.4.dp.toPx(), cap = StrokeCap.Round)
         }
-        Text("A little intention", fontFamily = FontFamily.Serif, fontSize = 27.sp,
-            modifier = Modifier.padding(top = 18.dp, bottom = 14.dp))
+        Box(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp),
+            contentAlignment = Alignment.CenterEnd) {
+            Box(Modifier.size(44.dp).offset(x = 7.dp).clip(CircleShape)
+                .clickable(interactionSource = remember { MutableInteractionSource() },
+                    indication = null, onClick = onDone)
+                .semantics { contentDescription = "Close settings" },
+                contentAlignment = Alignment.Center) {
+                Text("\u00D7", color = FadedInk.copy(alpha = .65f), fontSize = 24.sp)
+            }
+        }
         Setting("Start Gong", settings.startGong,
             gong = settings.startGongSound,
             onGong = { choice ->
-                changeSettings { it.copy(startGongSound = choice) }
+                changeSettings { it.copy(startGong = true, startGongSound = choice) }
                 previewGong(choice)
-            }) { value ->
+            },
+            onPreview = previewGong) { value ->
             changeSettings { it.copy(startGong = value) }
         }
         Setting("End Gong", settings.endGong,
             gong = settings.endGongSound,
             onGong = { choice ->
-                changeSettings { it.copy(endGongSound = choice) }
+                changeSettings { it.copy(endGong = true, endGongSound = choice) }
                 previewGong(choice)
-            }) { value ->
+            },
+            onPreview = previewGong) { value ->
             changeSettings { it.copy(endGong = value) }
         }
-        Setting("Continuous Gong", settings.continuousGong,
+        Setting("Repeat Gong", settings.continuousGong,
             gong = settings.middleGongSound,
-            gongLabel = "Middle gong",
             onGong = { choice ->
-                changeSettings { it.copy(middleGongSound = choice) }
+                changeSettings { it.copy(continuousGong = true, middleGongSound = choice) }
                 previewGong(choice)
-            }) { value ->
+            },
+            onPreview = previewGong) { value ->
             changeSettings { it.copy(continuousGong = value) }
         }
         Setting("Keep Screen Awake", settings.keepScreenAwake) { value ->
@@ -345,9 +326,6 @@ private fun SettingsPanel(
         Setting("Show Saying", settings.showSaying) { value ->
             changeSettings { it.copy(showSaying = value) }
         }
-        Box(Modifier.fillMaxWidth().padding(top = 14.dp), contentAlignment = Alignment.CenterEnd) {
-            InkTextAction("Done", Ink, 16.sp, onDone)
-        }
     }
 }
 
@@ -356,33 +334,38 @@ private fun Setting(
     label: String,
     checked: Boolean,
     gong: GongChoice? = null,
-    gongLabel: String = "Sound",
     onGong: ((GongChoice) -> Unit)? = null,
+    onPreview: (GongChoice) -> Unit = {},
     change: (Boolean) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = change)
-            .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(label, color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif,
-                modifier = Modifier.weight(1f).padding(end = 12.dp))
-            InkToggle(checked)
-        }
-        if (gong != null && onGong != null) GongPicker(gongLabel, gong, onGong)
+    Row(Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = change)
+        .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif,
+            modifier = Modifier.weight(1f).padding(end = 12.dp))
+        if (gong != null && onGong != null) GongPicker(gong, onGong, onPreview)
+        InkToggle(checked)
     }
 }
 
 /** Cycles through the available recordings; kept quiet so it never reads as a form control. */
 @Composable
-private fun GongPicker(label: String, choice: GongChoice, onChoice: (GongChoice) -> Unit) {
-    Row(Modifier.fillMaxWidth().padding(start = 2.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = FadedInk, fontSize = 12.sp, letterSpacing = 1.sp,
-            modifier = Modifier.weight(1f))
-        PickerArrow("‹", "Previous gong") { onChoice(choice.previous()) }
-        Text(choice.label, color = Ink.copy(alpha = .85f), fontFamily = FontFamily.Serif,
-            fontSize = 15.sp, letterSpacing = .5.sp, textAlign = TextAlign.Center,
-            modifier = Modifier.widthIn(min = 104.dp))
-        PickerArrow("›", "Next gong") { onChoice(choice.next()) }
+private fun GongPicker(
+    choice: GongChoice,
+    onSelect: (GongChoice) -> Unit,
+    onPreview: (GongChoice) -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        PickerArrow("‹", "Previous gong") { onSelect(choice.previous()) }
+        Box(Modifier.width(92.dp).height(40.dp).clip(CircleShape)
+            .clickable(interactionSource = remember { MutableInteractionSource() },
+                indication = null) { onPreview(choice) }
+            .semantics { contentDescription = "Preview ${choice.label}" },
+            contentAlignment = Alignment.Center) {
+            Text(choice.label, color = Ink.copy(alpha = .85f), fontFamily = FontFamily.Serif,
+                fontSize = 14.sp, letterSpacing = .5.sp, textAlign = TextAlign.Center,
+                maxLines = 1)
+        }
+        PickerArrow("›", "Next gong") { onSelect(choice.next()) }
     }
 }
 

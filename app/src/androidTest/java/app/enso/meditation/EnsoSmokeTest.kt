@@ -37,8 +37,8 @@ class EnsoSmokeTest {
 
             compose.onNodeWithContentDescription("Settings").performClick()
             compose.onNodeWithText("Vibration").assertIsDisplayed()
-            compose.onNodeWithText("Done").assertIsDisplayed()
-            compose.onNodeWithText("Continuous Gong").performClick()
+            compose.onNodeWithContentDescription("Close settings").assertIsDisplayed()
+            compose.onNodeWithText("Repeat Gong").performClick()
             awaitState { it.settings.continuousGong != original.settings.continuousGong }
             compose.onNodeWithText("Show Saying").performClick()
             awaitState { !it.settings.showSaying }
@@ -47,7 +47,7 @@ class EnsoSmokeTest {
             val saved = runBlocking { EnsoStore(compose.activity).load() }
             assertEquals(state.settings, saved.settings)
             assertEquals(state.selectedMs, saved.selectedMs)
-            compose.onNodeWithText("Done").performClick()
+            compose.onNodeWithContentDescription("Close settings").performClick()
             compose.onNodeWithText(state.saying).assertDoesNotExist()
 
             compose.onNodeWithContentDescription("Start").performClick()
