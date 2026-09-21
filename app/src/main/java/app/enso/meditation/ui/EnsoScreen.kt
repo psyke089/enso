@@ -5,7 +5,9 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -16,8 +18,11 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -25,6 +30,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
@@ -43,6 +49,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.enso.meditation.*
@@ -51,6 +58,7 @@ import app.enso.meditation.ui.theme.*
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @Composable
 fun EnsoScreen(
@@ -272,16 +280,33 @@ private fun SettingsPanel(
     onDone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier.fillMaxWidth().background(Paper)
+    val dragOffset = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+    val dragThreshold = with(LocalDensity.current) { 120.dp.toPx() }
+    Column(modifier.offset { IntOffset(0, dragOffset.value.roundToInt()) }
+        .fillMaxWidth().background(Paper)
         .navigationBarsPadding()
         .verticalScroll(rememberScrollState())
         .padding(start = 28.dp, end = 28.dp, bottom = 26.dp)) {
-        Canvas(Modifier.fillMaxWidth().height(4.dp)) {
-            drawLine(Ink.copy(alpha = .45f), Offset(0f, size.height / 2),
-                Offset(size.width, size.height / 2), 1.4.dp.toPx(), cap = StrokeCap.Round)
+        Box(Modifier.fillMaxWidth().height(30.dp)
+            .draggable(
+                state = rememberDraggableState { delta ->
+                    scope.launch { dragOffset.snapTo((dragOffset.value + delta).coerceAtLeast(0f)) }
+                },
+                orientation = Orientation.Vertical,
+                onDragStopped = { velocity ->
+                    if (dragOffset.value > dragThreshold || velocity > 900f) onDone()
+                    else dragOffset.animateTo(0f, spring())
+                },
+            ),
+            contentAlignment = Alignment.Center) {
+            Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp))
+                .background(Ink.copy(alpha = .3f)))
         }
-        Box(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 6.dp),
-            contentAlignment = Alignment.CenterEnd) {
+        Row(Modifier.fillMaxWidth().padding(bottom = 14.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text("Settings", color = FadedInk.copy(alpha = .65f), fontFamily = FontFamily.Serif,
+                fontSize = 14.sp, letterSpacing = .3.sp, modifier = Modifier.weight(1f))
             Box(Modifier.size(44.dp).offset(x = 7.dp).clip(CircleShape)
                 .clickable(interactionSource = remember { MutableInteractionSource() },
                     indication = null, onClick = onDone)
