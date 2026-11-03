@@ -29,3 +29,4 @@ Enso is a minimal meditation timer built with Kotlin and Jetpack Compose. It run
 ## License
 
 [MIT](LICENSE)
+
