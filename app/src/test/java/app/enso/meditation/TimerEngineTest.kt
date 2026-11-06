@@ -5,13 +5,13 @@ import org.junit.Test
 
 class TimerEngineTest {
     private val interval = DEFAULT_DURATION
-    private fun repeating() = TimerEngine(TimerSnapshot(settings = EnsoSettings(continuousGong = true)))
+    private fun repeating() = TimerEngine(TimerSnapshot(repeatForever = true))
 
     @Test fun defaultsMatchSpecification() {
         val engine = TimerEngine()
         assertEquals(600_000L, engine.snapshot.selectedMs)
         assertEquals(TimerPhase.Idle, engine.uiState(0).phase)
-        assertEquals(EnsoSettings(true, true, false, true, false), engine.snapshot.settings)
+        assertEquals(EnsoSettings(true, true, true, true, false), engine.snapshot.settings)
     }
 
     @Test fun durationChangesByExactlyFiveMinutes() {
@@ -173,21 +173,22 @@ class TimerEngineTest {
         assertEquals(10, events.count { it is TimerEvent.IntervalCompleted && it.gong })
     }
 
-    @Test fun continuousAndEndGongHaveIndependentResponsibilities() {
+    @Test fun repeatAndEndGongHaveIndependentResponsibilities() {
         val engine = TimerEngine(TimerSnapshot(settings = EnsoSettings(
-            continuousGong = true, endGong = false, vibration = true)))
+            repeatGong = false, endGong = true, vibration = true), repeatForever = true))
         engine.start(0)
         assertEquals(listOf(TimerEvent.IntervalCompleted(false, true)), engine.advance(interval))
         assertEquals(TimerPhase.Running, engine.uiState(interval).phase)
     }
 
-    @Test fun settingsApplyImmediatelyExceptSessionRepetition() {
+    @Test fun soundSettingsApplyImmediatelyWithoutChangingRepetition() {
         val engine = repeating()
         engine.start(0)
-        engine.updateSettings(EnsoSettings(endGong = false, continuousGong = false, vibration = true))
+        engine.updateSettings(EnsoSettings(endGong = false, repeatGong = false, vibration = true))
         assertEquals(listOf(TimerEvent.IntervalCompleted(false, true)), engine.advance(interval))
         assertNotNull(engine.snapshot.session)
         engine.stop()
+        engine.setRepeatForever(false)
         engine.start(interval)
         engine.advance(interval * 2)
         assertNull(engine.snapshot.session)
@@ -238,6 +239,117 @@ class TimerEngineTest {
         assertNull(TimerEngine(TimerSnapshot(session = Session(0, 100, true))).snapshot.session)
         assertNull(TimerEngine(TimerSnapshot(session = Session(interval, 100, true, -1))).snapshot.session)
         assertNull(TimerEngine(TimerSnapshot(session = Session(interval, Long.MAX_VALUE, true))).snapshot.session)
+    }
+
+    @Test fun finiteRepetitionsEndAtTheLastBoundaryWithIndependentGongs() {
+        val engine = TimerEngine(TimerSnapshot(repeatCount = 3,
+            settings = EnsoSettings(repeatGong = false, endGong = true)))
+        engine.start(17)
+        for (boundary in 1..2) {
+            assertEquals(listOf(TimerEvent.IntervalCompleted(false, false)), engine.advance(17 + boundary * interval))
+            assertEquals(boundary.toLong(), engine.uiState(17 + boundary * interval).completedIntervals)
+            assertNotNull(engine.snapshot.session)
+        }
+        assertEquals(listOf(TimerEvent.IntervalCompleted(true, false)), engine.advance(17 + 3 * interval))
+        assertNull(engine.snapshot.session)
+        assertTrue(engine.advance(17 + 4 * interval).isEmpty())
+        assertEquals(3, engine.snapshot.repeatCount)
+    }
+
+    @Test fun endGongCanBeSilentWhileInteriorGongsAreEnabled() {
+        val engine = TimerEngine(TimerSnapshot(repeatCount = 2,
+            settings = EnsoSettings(repeatGong = true, endGong = false)))
+        engine.start(0)
+        assertEquals(listOf(TimerEvent.IntervalCompleted(true, false)), engine.advance(interval))
+        assertEquals(listOf(TimerEvent.IntervalCompleted(false, false)), engine.advance(2 * interval))
+    }
+
+    @Test fun delayedFiniteWakeConsumesMissedIntervalsWithoutDriftOrBurst() {
+        val engine = TimerEngine(TimerSnapshot(repeatCount = 5))
+        engine.start(23)
+        assertEquals(1, engine.advance(3 * interval + 99).size)
+        assertEquals(3L, engine.snapshot.session!!.completedIntervals)
+        assertEquals(4 * interval + 23, engine.snapshot.session!!.deadlineMs)
+        assertEquals(1, engine.advance(50 * interval).size)
+        assertNull(engine.snapshot.session)
+        assertTrue(engine.advance(50 * interval + 1).isEmpty())
+    }
+
+    @Test fun finiteRestoreCountsMissedIntervalsAndExpiresSilently() {
+        val engine = TimerEngine(TimerSnapshot(repeatCount = 5))
+        engine.start(0)
+        val restored = TimerEngine(engine.snapshot, 3 * interval + 123)
+        assertEquals(3L, restored.snapshot.session!!.completedIntervals)
+        assertEquals(4 * interval, restored.snapshot.session!!.deadlineMs)
+        assertTrue(restored.advance(3 * interval + 124).isEmpty())
+        assertNull(TimerEngine(restored.snapshot, 5 * interval).snapshot.session)
+    }
+
+    @Test fun totalProgressSurvivesPauseResumeAndRestoration() {
+        val engine = TimerEngine(TimerSnapshot(repeatCount = 3))
+        assertEquals(3 * interval, engine.uiState(0).totalMs)
+        assertEquals(0f, engine.uiState(0).progress, 0f)
+        engine.start(0)
+        engine.advance(interval)
+        engine.pause(interval + interval / 2)
+        val paused = engine.uiState(9 * interval)
+        assertEquals(1L, paused.completedIntervals)
+        assertEquals(interval + interval / 2, paused.elapsedMs)
+        assertEquals(.5f, paused.progress, .0001f)
+        val restored = TimerEngine(engine.snapshot, 9 * interval)
+        assertEquals(paused, restored.uiState(9 * interval))
+        restored.resume(9 * interval)
+        restored.advance(9 * interval + interval / 2)
+        assertEquals(2L, restored.uiState(10 * interval).completedIntervals)
+        assertEquals(2 * interval + interval / 2, restored.uiState(10 * interval).elapsedMs)
+        restored.stop()
+        assertEquals(0f, restored.uiState(10 * interval).progress, 0f)
+    }
+
+    @Test fun unlimitedProgressShowsElapsedTimeAndCurrentInterval() {
+        val engine = repeating()
+        engine.start(0)
+        engine.advance(4 * interval)
+        val state = engine.uiState(4 * interval + interval / 2)
+        assertNull(state.totalMs)
+        assertEquals(4 * interval + interval / 2, state.elapsedMs)
+        assertEquals(.5f, state.progress, .0001f)
+    }
+
+    @Test fun repetitionSelectionPersistsAndIsLockedWhileRunningOrPaused() {
+        val engine = TimerEngine()
+        engine.adjustRepetitions(1)
+        engine.adjustRepetitions(1)
+        engine.setRepeatForever(true)
+        val restored = TimerEngine(engine.snapshot)
+        assertEquals(3, restored.snapshot.repeatCount)
+        assertTrue(restored.snapshot.repeatForever)
+        restored.setRepeatForever(false)
+        restored.start(0)
+        restored.adjustRepetitions(-1)
+        restored.setRepeatForever(true)
+        restored.pause(100)
+        restored.adjustRepetitions(1)
+        restored.setRepeatForever(true)
+        assertEquals(3, restored.snapshot.repeatCount)
+        assertFalse(restored.snapshot.repeatForever)
+        assertEquals(3, restored.snapshot.session!!.repeatCount)
+        assertFalse(restored.snapshot.session!!.continuous)
+    }
+
+    @Test fun repetitionBoundsAndCorruptRestoredCountsAreSafe() {
+        val engine = TimerEngine()
+        repeat(200) { engine.adjustRepetitions(Int.MAX_VALUE) }
+        assertEquals(MAX_REPETITIONS, engine.snapshot.repeatCount)
+        repeat(200) { engine.adjustRepetitions(Int.MIN_VALUE) }
+        assertEquals(1, engine.snapshot.repeatCount)
+        assertEquals(1, TimerEngine(TimerSnapshot(repeatCount = Int.MIN_VALUE)).snapshot.repeatCount)
+        val maximum = TimerEngine(TimerSnapshot(selectedMs = MAX_DURATION, repeatCount = Int.MAX_VALUE))
+        assertEquals(MAX_DURATION * MAX_REPETITIONS, maximum.uiState(0).totalMs)
+        assertNull(TimerEngine(TimerSnapshot(session = Session(interval, interval, false,
+            repeatCount = 3, completedIntervals = 3))).snapshot.session)
+        assertNull(TimerEngine(TimerSnapshot(session = Session(interval, interval, true,
+            completedIntervals = -1))).snapshot.session)
     }
 
     @Test fun timeFormattingIsStableAndRoundsRemainingTimeUp() {

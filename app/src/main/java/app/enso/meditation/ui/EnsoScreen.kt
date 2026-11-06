@@ -29,6 +29,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -40,7 +41,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -64,6 +67,8 @@ import kotlin.math.roundToInt
 fun EnsoScreen(
     state: TimerUiState,
     adjustDuration: (Int) -> Unit,
+    adjustRepetitions: (Int) -> Unit,
+    setRepeatForever: (Boolean) -> Unit,
     changeSettings: ((EnsoSettings) -> EnsoSettings) -> Unit,
     previewGong: (GongChoice) -> Unit,
     action: (SessionAction) -> Unit,
@@ -74,8 +79,9 @@ fun EnsoScreen(
         SumiLandscape(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
         BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
             val compact = maxHeight < 580.dp
-            val circleSize = minOf(maxWidth - 24.dp, if (compact) 290.dp else 380.dp)
-            val topSpace = if (compact) 8.dp else (maxHeight * .085f).coerceAtMost(90.dp)
+            val topSpace = if (compact) 8.dp else (maxHeight * .045f).coerceAtMost(48.dp)
+            val circleSize = minOf(maxWidth - 24.dp, if (compact) 290.dp else 380.dp,
+                (maxHeight - topSpace - 400.dp).coerceAtLeast(180.dp))
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
@@ -85,10 +91,9 @@ fun EnsoScreen(
                 }
                 Spacer(Modifier.height(topSpace))
                 TimerCircle(state, adjustDuration, Modifier.size(circleSize))
-                Box(Modifier.height(36.dp), contentAlignment = Alignment.Center) {
-                    if (state.continuous) Text("∞", color = FadedInk, fontSize = 22.sp)
-                }
-                Spacer(Modifier.height(if (compact) 4.dp else 20.dp))
+                RepetitionControl(state, adjustRepetitions, setRepeatForever)
+                SessionProgress(state)
+                Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
                 InkAction(
                     label = when (state.phase) { TimerPhase.Idle -> "Start"; TimerPhase.Running -> "Pause"; TimerPhase.Paused -> "Resume" },
                     artwork = if (state.phase == TimerPhase.Running) R.drawable.ink_pause else R.drawable.ink_start,
@@ -127,6 +132,105 @@ fun EnsoScreen(
                     onDone = { settingsOpen = false },
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
+            }
+        }
+    }
+}
+
+/** A small ink selector: finite count and infinity share the same quiet baseline. */
+@Composable
+private fun RepetitionControl(state: TimerUiState, adjust: (Int) -> Unit, forever: (Boolean) -> Unit) {
+    if (state.phase != TimerPhase.Idle) {
+        Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
+            Text("${state.completedIntervals + 1} / ${if (state.continuous) "∞" else state.repeatCount}",
+                fontFamily = FontFamily.Serif, fontSize = 18.sp, color = FadedInk,
+                modifier = Modifier.semantics {
+                    contentDescription = "Interval ${state.completedIntervals + 1} of ${if (state.continuous) "unlimited" else state.repeatCount}"
+                })
+        }
+        return
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        RepetitionButton("−", "Decrease repetitions", state.ready && (state.continuous || state.repeatCount > 1)) { adjust(-1) }
+        Box(Modifier.widthIn(min = 56.dp).height(48.dp)
+            .selectable(selected = !state.continuous, enabled = state.ready, role = Role.RadioButton,
+                interactionSource = remember { MutableInteractionSource() }, indication = null,
+                onClick = { forever(false) })
+            .semantics {
+                contentDescription = "Finite repetitions"
+                stateDescription = "${state.repeatCount} repetitions"
+            }, contentAlignment = Alignment.Center) {
+            Text("${state.repeatCount}×", fontFamily = FontFamily.Serif, fontSize = 20.sp,
+                color = if (state.continuous) FadedInk else Ink)
+            SelectionStroke(!state.continuous, Modifier.align(Alignment.BottomCenter))
+        }
+        RepetitionButton("+", "Increase repetitions", state.ready && (state.continuous || state.repeatCount < MAX_REPETITIONS)) { adjust(1) }
+        Spacer(Modifier.width(12.dp))
+        Box(Modifier.size(48.dp)
+            .selectable(selected = state.continuous, enabled = state.ready, role = Role.RadioButton,
+                interactionSource = remember { MutableInteractionSource() }, indication = null,
+                onClick = { forever(true) })
+            .semantics { contentDescription = "Repeat forever" }, contentAlignment = Alignment.Center) {
+            Text("∞", fontFamily = FontFamily.Serif, fontSize = 25.sp,
+                color = if (state.continuous) Ink else FadedInk)
+            SelectionStroke(state.continuous, Modifier.align(Alignment.BottomCenter))
+        }
+    }
+}
+
+@Composable
+private fun SelectionStroke(selected: Boolean, modifier: Modifier) {
+    Canvas(modifier.padding(bottom = 5.dp).size(18.dp, 3.dp)) {
+        if (selected) drawLine(FadedInk.copy(alpha = .65f), Offset(0f, size.height * .55f),
+            Offset(size.width, size.height * .3f), 1.dp.toPx(), cap = StrokeCap.Round)
+    }
+}
+
+@Composable
+private fun RepetitionButton(symbol: String, label: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(Modifier.size(48.dp).clip(CircleShape)
+        .clickable(enabled = enabled, role = Role.Button,
+            interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+        .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        Text(symbol, fontSize = 20.sp, fontWeight = FontWeight.Light,
+            color = FadedInk.copy(alpha = if (enabled) .85f else .3f))
+    }
+}
+
+/** A narrow, slightly uneven ink wash; the painted Enso remains the visual focus. */
+@Composable
+private fun SessionProgress(state: TimerUiState) {
+    val active = state.phase != TimerPhase.Idle
+    val total = state.totalMs?.let(::formatTime) ?: "∞"
+    val elapsed = formatTime(state.elapsedMs / 1000 * 1000)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(if (active) "$elapsed / $total" else total,
+            color = FadedInk, fontFamily = FontFamily.Monospace, fontSize = 12.sp,
+            modifier = Modifier.padding(top = 2.dp, bottom = 8.dp).semantics {
+                contentDescription = when {
+                    active && state.totalMs == null -> "$elapsed elapsed, unlimited duration"
+                    active -> "$elapsed elapsed, $total total duration"
+                    state.totalMs == null -> "Unlimited duration"
+                    else -> "$total total duration"
+                }
+            })
+        Canvas(Modifier.width(156.dp).height(4.dp).semantics {
+            contentDescription = if (state.continuous) "Interval progress" else "Session progress"
+            progressBarRangeInfo = ProgressBarRangeInfo(state.progress, 0f..1f)
+        }) {
+            val stroke = Path().apply {
+                moveTo(0f, size.height * .6f)
+                lineTo(size.width * .12f, size.height * .25f)
+                lineTo(size.width * .54f, size.height * .38f)
+                lineTo(size.width * .91f, size.height * .2f)
+                lineTo(size.width, size.height * .5f)
+                lineTo(size.width * .83f, size.height * .72f)
+                lineTo(size.width * .39f, size.height * .8f)
+                close()
+            }
+            drawPath(stroke, FadedInk.copy(alpha = .16f))
+            clipRect(right = size.width * state.progress) {
+                drawPath(stroke, FadedInk.copy(alpha = .72f))
             }
         }
     }
@@ -333,14 +437,14 @@ private fun SettingsPanel(
             onPreview = previewGong) { value ->
             changeSettings { it.copy(endGong = value) }
         }
-        Setting("Repeat Gong", settings.continuousGong,
+        Setting("Repeat Gong", settings.repeatGong,
             gong = settings.middleGongSound,
             onGong = { choice ->
-                changeSettings { it.copy(continuousGong = true, middleGongSound = choice) }
+                changeSettings { it.copy(repeatGong = true, middleGongSound = choice) }
                 previewGong(choice)
             },
             onPreview = previewGong) { value ->
-            changeSettings { it.copy(continuousGong = value) }
+            changeSettings { it.copy(repeatGong = value) }
         }
         Setting("Keep Screen Awake", settings.keepScreenAwake) { value ->
             changeSettings { it.copy(keepScreenAwake = value) }

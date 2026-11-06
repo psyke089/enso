@@ -52,7 +52,7 @@ class MeditationService : Service() {
                     stopForeground(STOP_FOREGROUND_REMOVE)
                     stopSelf(latestStartId)
                 } else {
-                    val key = "${state.phase}:${formatTime(state.remainingMs)}:${state.continuous}"
+                    val key = "${state.phase}:${formatTime(state.remainingMs)}:${state.continuous}:${state.completedIntervals}"
                     if (key != lastNotification) {
                         notifications.notify(NOTIFICATION, notification(state))
                         lastNotification = key
@@ -84,7 +84,9 @@ class MeditationService : Service() {
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Enso")
             .setContentText(if (!state.ready) "Meditation" else
-                "${formatTime(state.remainingMs)}${if (state.phase == TimerPhase.Paused) " · Paused" else ""}${if (state.continuous) " · Continuous Gong" else ""}")
+                "${formatTime(state.remainingMs)}${if (state.phase == TimerPhase.Paused) " · Paused" else ""}" +
+                    if (state.continuous) " · ${state.completedIntervals + 1} / ∞"
+                    else if (state.repeatCount > 1) " · ${state.completedIntervals + 1} / ${state.repeatCount}" else "")
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
             .setSilent(true).setShowWhen(false).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)

@@ -19,6 +19,63 @@ class EnsoSmokeTest {
     private val state get() = controller.state.value
     private fun awaitState(test: (TimerUiState) -> Boolean) = compose.waitUntil(5_000) { test(state) }
 
+    @Test fun repetitionSelectionAndSessionPersistWithoutChangingGongSettings() {
+        awaitState { it.ready }
+        assertEquals(TimerPhase.Idle, state.phase)
+        val original = state
+        try {
+            controller.setRepeatForever(false)
+            awaitState { !it.continuous }
+            while (state.repeatCount != 2) {
+                val before = state.repeatCount
+                controller.adjustRepetitions(if (before > 2) -1 else 1)
+                awaitState { it.repeatCount != before }
+            }
+            compose.onNodeWithContentDescription("Increase repetitions").performClick()
+            awaitState { it.repeatCount == 3 }
+            compose.onNodeWithContentDescription("Decrease repetitions").performClick()
+            awaitState { it.repeatCount == 2 }
+            compose.onNodeWithContentDescription("Repeat forever").performClick()
+            awaitState { it.continuous && it.totalMs == null }
+            compose.onNodeWithContentDescription("Finite repetitions").performClick()
+            awaitState { !it.continuous && it.totalMs == 2 * it.selectedMs }
+            assertEquals(original.settings, state.settings)
+            val saved = runBlocking { EnsoStore(compose.activity).load() }
+            assertEquals(2, saved.repeatCount)
+            assertFalse(saved.repeatForever)
+            compose.onNodeWithContentDescription("Start").performClick()
+            awaitState { it.phase == TimerPhase.Running }
+            compose.onNodeWithContentDescription("Increase repetitions").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Repeat forever").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Interval 1 of 2").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Pause").performClick()
+            awaitState { it.phase == TimerPhase.Paused }
+            val paused = state
+            val pausedSnapshot = runBlocking { EnsoStore(compose.activity).load() }
+            assertEquals(2, pausedSnapshot.session!!.repeatCount)
+            assertEquals(0L, pausedSnapshot.session.completedIntervals)
+            assertEquals(paused.remainingMs, pausedSnapshot.session.pausedRemainingMs)
+            compose.activityRule.scenario.recreate()
+            compose.onNodeWithContentDescription("Interval 1 of 2").assertIsDisplayed()
+            assertEquals(paused.elapsedMs, state.elapsedMs)
+            assertEquals(paused.progress, state.progress, 0f)
+            compose.onNodeWithContentDescription("Stop").performClick()
+            awaitState { it.phase == TimerPhase.Idle }
+            assertEquals(2, state.repeatCount)
+            assertNull(runBlocking { EnsoStore(compose.activity).load() }.session)
+        } finally {
+            compose.runOnIdle { MeditationService.send(compose.activity, SessionAction.Stop) }
+            awaitState { it.phase == TimerPhase.Idle }
+            while (state.repeatCount != original.repeatCount) {
+                val before = state.repeatCount
+                controller.adjustRepetitions(if (before > original.repeatCount) -1 else 1)
+                awaitState { it.repeatCount != before }
+            }
+            controller.setRepeatForever(original.continuous)
+            awaitState { it.continuous == original.continuous }
+        }
+    }
+
     @Test fun durationSettingsAndSessionLifecycle() {
         awaitState { it.ready }
         assertEquals(TimerPhase.Idle, state.phase)
@@ -38,8 +95,11 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription("Settings").performClick()
             compose.onNodeWithText("Vibration").assertIsDisplayed()
             compose.onNodeWithContentDescription("Close settings").assertIsDisplayed()
-            compose.onNodeWithText("Repeat Gong").performClick()
-            awaitState { it.settings.continuousGong != original.settings.continuousGong }
+            // Tap the label itself; the merged row's center overlaps the sound-preview control.
+            compose.onNodeWithText("Repeat Gong", useUnmergedTree = true).performClick()
+            awaitState { it.settings.repeatGong != original.settings.repeatGong }
+            assertEquals(original.repeatCount, state.repeatCount)
+            assertEquals(original.continuous, state.continuous)
             compose.onNodeWithText("Show Saying").performClick()
             awaitState { !it.settings.showSaying }
             compose.onNodeWithText("Vibration").performClick()

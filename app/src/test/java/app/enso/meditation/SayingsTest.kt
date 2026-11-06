@@ -44,7 +44,7 @@ class SayingsTest {
 
     @Test fun silentRepeatingBoundariesRotateEvenWhenSayingIsHidden() {
         val engine = TimerEngine(TimerSnapshot(settings = EnsoSettings(
-            startGong = false, endGong = false, continuousGong = true, showSaying = false)))
+            startGong = false, endGong = false, repeatGong = false, showSaying = false), repeatForever = true))
         engine.start(0)
         val started = engine.uiState(0).saying
         engine.advance(DEFAULT_DURATION * 10 + 123)

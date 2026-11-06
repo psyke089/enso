@@ -108,7 +108,7 @@ The user can:
 - stop it
 - hear a gong when meditation begins
 - hear a gong when an interval ends
-- optionally repeat the interval indefinitely using Continuous Gong
+- repeat the interval a chosen number of times, or indefinitely
 
 The normal workflow should require essentially no navigation.
 
@@ -592,32 +592,21 @@ Critical timing logic must not live directly inside Composable functions.
 
 ---
 
-# 24. Continuous Gong
+# 24. Session Repetitions
 
-Settings contain an option named:
+Choose repetitions directly below the Enso and above Start:
 
-`Continuous Gong`
+- a finite count from 1 to 99, adjusted with minus / plus
+- infinity for an unlimited session
 
-Continuous Gong turns Enso into a repeating interval gong.
+The finite count is remembered when switching to infinity and back.
+Default: one countdown. Selection persists locally and is locked while running or paused.
 
-Example:
-
-Selected duration:
-
-`10 minutes`
-
-Result:
-
-`10:00`
-→ `00:00`
-→ Gong
-→ `10:00`
-→ `00:00`
-→ Gong
-→ `10:00`
-→ ...
-
-This continues indefinitely until the user explicitly stops the session.
+Show a discreet total duration below the selector. During a session, show the current
+interval number and elapsed / total time. Unlimited sessions show elapsed time / infinity.
+A thin, organic ink line shows total progress for finite sessions and current-interval
+progress for unlimited sessions. Pause freezes elapsed time and progress.
+Keep this subordinate to the painted Enso; avoid a conventional circular progress ring.
 
 ---
 
@@ -651,63 +640,43 @@ A 10-minute Continuous Gong should remain aligned to ten-minute intervals even a
 
 ---
 
-# 26. Continuous Gong Behavior
+# 26. Repeated Session Behavior
 
-When Continuous Gong is enabled:
+At each interior boundary:
 
-- reaching zero triggers one interval completion event
-- optionally play the End Gong
-- optionally vibrate
-- immediately continue into another interval of the same duration
-- repeat indefinitely until explicitly stopped
+- consume one interval completion event
+- optionally play the Repeat Gong and vibrate
+- immediately continue into the next interval of the same duration
 
-The Start Gong must play only when the user initially starts the complete session.
+A finite session ends after exactly the selected number of countdowns, optionally
+playing the End Gong and vibrating at its final boundary. An unlimited session
+continues until explicitly stopped.
 
-It must NOT replay at every Continuous Gong interval.
-
-Pause pauses the current interval.
-
-Resume continues that interval.
-
-Stop terminates the entire repeating session.
-
-Continuous Gong should be subtly indicated on the main screen while enabled.
-
-Do not add a large banner or status panel.
+Start Gong plays only once, when starting the complete session.
+Pause freezes the current interval; Resume continues it; Stop ends the entire session.
+Repetition timing remains based on the original boundaries, accounting for pauses.
 
 ---
 
-# 27. End Gong and Continuous Gong
+# 27. Repeat Gong and End Gong
 
-The `End Gong` setting controls whether a gong sound plays at an interval boundary.
+Repetition is selected on the main screen, independently of sound settings.
 
-This includes:
+- `Repeat Gong` enables / disables and selects the sound at interior boundaries.
+- `End Gong` enables / disables and selects the final sound of a finite session.
+- `Start Gong` enables / disables and selects the initial sound.
 
-- the final boundary of a normal meditation
-- every interval boundary during Continuous Gong
-
-Therefore:
-
-Continuous Gong ON + End Gong ON:
-
-- repeat timer
-- play gong every interval
-
-Continuous Gong ON + End Gong OFF:
-
-- repeat timer silently
-
-Continuous Gong controls repetition.
-
-End Gong controls sound.
-
-Keep these responsibilities separate.
+These sound preferences apply immediately and never change the repetition count.
+An unlimited session has interior boundaries only; manual Stop remains silent.
+On upgrade, the former Continuous / Repeat Gong repetition preference migrates to
+infinity on the main screen. Existing interval sound enablement follows the old
+End Gong preference, which previously controlled interval audio.
 
 ---
 
 # 28. Missed Intervals and Restoration
 
-If the app process is temporarily destroyed or recreated while a Continuous Gong session is active:
+If the app process is temporarily destroyed or recreated while a repeated session is active:
 
 - restore the active session when reasonably possible
 - calculate the current interval from the original timing reference
@@ -719,7 +688,8 @@ Example:
 
 If three interval boundaries passed while Enso could not play sound, restoring the app must NOT immediately play three gongs.
 
-Restore the current timer position and continue normally.
+Restore the current timer position and completed interval count, then continue normally.
+A finite session whose final boundary has passed restores to Idle silently.
 
 Only future real-time boundaries should generate new completion events.
 
@@ -778,7 +748,8 @@ Relevant information may include:
 - session state
 - timing anchor / deadline
 - accumulated paused duration
-- Continuous Gong state relevant to that session
+- finite repetition count or unlimited mode captured for that session
+- number of completed intervals
 
 Do not persist changing remaining seconds every second if the current position can instead be reconstructed from timing anchors.
 
@@ -793,9 +764,10 @@ Enso uses local audio assets.
 Logical sounds:
 
 - Start Gong
-- End / Interval Gong
+- End Gong
+- Repeat / Interval Gong
 
-The initial version may use the same recording for both.
+The initial version may use the same recording for all three.
 
 The audio implementation should make it easy to support multiple gong recordings later.
 
@@ -869,7 +841,7 @@ Settings:
 
 - Start Gong
 - End Gong
-- Continuous Gong
+- Repeat Gong (sound only)
 - Keep Screen Awake
 - Vibration
 
@@ -892,7 +864,8 @@ Suggested defaults:
 - selected duration: 10 minutes
 - Start Gong: ON
 - End Gong: ON
-- Continuous Gong: OFF
+- repetition count: 1 (unlimited mode OFF)
+- Repeat Gong: ON
 - Keep Screen Awake: ON
 - Vibration: OFF
 
@@ -926,16 +899,11 @@ Setting:
 
 When enabled:
 
-play the gong when an interval completes.
+play the gong at the final boundary of a finite session.
 
 When disabled:
 
-interval completion is silent.
-
-This applies both to:
-
-- normal sessions
-- Continuous Gong intervals
+the session ends silently. Interior boundaries use the independent Repeat Gong setting.
 
 ---
 
@@ -1011,7 +979,7 @@ At minimum, the timer should clearly represent states equivalent to:
 - Running
 - Paused
 
-Continuous Gong is a behavior/settings flag, not a separate screen state.
+Repetition count and unlimited mode are session properties, not separate screen states.
 
 UI behavior should follow the state model consistently.
 

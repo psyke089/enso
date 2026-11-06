@@ -62,9 +62,8 @@ class SessionController(application: Application) {
                     is TimerEvent.IntervalCompleted -> {
                         if (event.gong) {
                             val settings = engine.snapshot.settings
-                            // A repeating session keeps its session alive, so its boundaries are
-                            // interval gongs; a one-shot session's boundary is the final end gong.
-                            val sound = if (engine.snapshot.session?.continuous == true) {
+                            // An interior boundary keeps the session alive; its final boundary ends it.
+                            val sound = if (engine.snapshot.session != null) {
                                 settings.middleGongSound
                             } else settings.endGongSound
                             audio.play(sound)
@@ -77,6 +76,10 @@ class SessionController(application: Application) {
     }
 
     fun adjustDuration(direction: Int) { scope.launch { mutate { adjustDuration(direction); emptyList() } } }
+
+    fun adjustRepetitions(direction: Int) { scope.launch { mutate { adjustRepetitions(direction); emptyList() } } }
+
+    fun setRepeatForever(forever: Boolean) { scope.launch { mutate { setRepeatForever(forever); emptyList() } } }
 
     suspend fun onLaunch() = mutate { refreshSaying(); emptyList() }
 
