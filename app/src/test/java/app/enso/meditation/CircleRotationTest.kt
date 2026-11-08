@@ -37,6 +37,46 @@ class CircleRotationTest {
         assertEquals(0, rotation.move(radians(175.0)))
     }
 
+    @Test fun lowerStopBlocksRotationAndReversesImmediately() {
+        val rotation = CircleRotation()
+        rotation.move(0.0)
+        assertEquals(0, rotation.move(radians(-90.0), minimumSteps = 0))
+        assertEquals(0f, rotation.deltaDegrees, 0f)
+        assertEquals(1, rotation.move(radians(-74.0), minimumSteps = 0))
+        assertEquals(16f, rotation.deltaDegrees, .001f)
+    }
+
+    @Test fun overshootingLastStepStopsAtItsDetentAndDiscardsExcessMovement() {
+        val rotation = CircleRotation()
+        rotation.move(0.0)
+        assertEquals(0, rotation.move(radians(-10.0), minimumSteps = -1))
+        assertEquals(-1, rotation.move(radians(-70.0), minimumSteps = -1))
+        assertEquals(-5f, rotation.deltaDegrees, .001f)
+        assertEquals(0, rotation.move(radians(-120.0), minimumSteps = 0))
+        assertEquals(0f, rotation.deltaDegrees, 0f)
+        assertEquals(1, rotation.move(radians(-104.0), minimumSteps = 0))
+    }
+
+    @Test fun partialMoveAwayFromStopCanReturnWithoutCrossingIt() {
+        val rotation = CircleRotation()
+        rotation.move(0.0)
+        assertEquals(0, rotation.move(radians(8.0), minimumSteps = 0))
+        assertEquals(0, rotation.move(radians(-20.0), minimumSteps = 0))
+        assertEquals(-8f, rotation.deltaDegrees, .001f)
+        assertEquals(0, rotation.move(radians(-30.0), minimumSteps = 0))
+        assertEquals(0f, rotation.deltaDegrees, 0f)
+    }
+
+    @Test fun upperStopAlsoBlocksFurtherRotation() {
+        val rotation = CircleRotation()
+        rotation.move(0.0)
+        assertEquals(1, rotation.move(radians(80.0), maximumSteps = 1))
+        assertEquals(15f, rotation.deltaDegrees, .001f)
+        assertEquals(0, rotation.move(radians(100.0), maximumSteps = 0))
+        assertEquals(0f, rotation.deltaDegrees, 0f)
+        assertEquals(-1, rotation.move(radians(84.0), maximumSteps = 0))
+    }
+
     @Test fun multipleTurnsAndLimitsUseNormalDurationSteps() {
         for (direction in listOf(-1, 1)) {
             val rotation = CircleRotation()

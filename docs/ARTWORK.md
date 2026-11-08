@@ -38,3 +38,11 @@ Use case: stylized-concept. Asset type: single square production Android meditat
 Asset: `app/src/main/res/drawable-nodpi/ink_reset.png`
 
 Use case: stylized-concept. Asset type: single square production Android meditation app control icon. Reference image is STYLE REFERENCE ONLY: match its warm near-black charcoal sumi ink, dry-brush fibers, uneven edges and restrained hand-painted texture. Create a RESET icon: a single counterclockwise nearly circular brush-painted arrow, with a clear small triangular arrowhead at its upper-left end pointing down-left, familiar restart/reset symbol. Clearly visible gap between arrowhead and tail; bold simple silhouette recognizable at 32dp, natural irregular calligraphic brush width, unfilled transparent center. Center mark occupying 65 percent of square, generous clear margins. True transparent background with alpha. No paper rectangle, no checkerboard, no text, no border, no shadow, no extra ornament. One reset icon only.
+
+## Infinity (2026-11-08)
+
+Asset: `app/src/main/res/drawable-nodpi/ink_infinity.png`
+
+Generated with the built-in `image_gen` tool using `ink_reset.png` as a style reference only. The original RGBA image is copied unchanged, preserving transparency. Displayed at 48 × 32 dp for a larger, quieter replacement of the font glyph.
+
+Use case: stylized-concept. Asset type: single production Android meditation timer icon. Reference image is STYLE REFERENCE ONLY: match its warm near-black charcoal sumi ink, dry brush fibers, softly uneven edges, subtle ink texture and restrained Japanese calligraphy. Subject: a single horizontally elongated infinity symbol, two graceful clearly open loops meeting at the center, painted in one flowing calligraphy brush gesture. Bold simple familiar infinity silhouette legible at 40dp wide. Composition: centered, symbol occupies about 82 percent of image width and 40 percent of image height; generous transparent margins, balanced loops with subtle natural asymmetry. True transparent background with alpha, including both loop interiors. No paper rectangle, no checkerboard, no shadows, no border, no letters, no other symbols or decorations. This is one standalone infinity icon only.

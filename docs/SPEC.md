@@ -283,6 +283,8 @@ While Idle, trace the Enso clockwise to increase duration and counterclockwise t
 The painted circle follows the finger continuously during adjustment, while the text stays upright.
 Keep its last orientation after release and while running or paused; do not animate it during countdown.
 Preserve the orientation across activity recreation.
+At the minimum or maximum duration, the painted circle stops in the blocked direction.
+Clamp fast overshoots to the remaining duration steps, and allow immediate reversal.
 Each 15° of rotation changes the duration by the configured minute step.
 Settings offers 1, 2, 5, 10 and 15 minutes per step; default: 5. Persist this preference locally.
 Duration remains bounded from 5 minutes to 24 hours, with whole-minute precision.
@@ -297,7 +299,8 @@ Display repetitions as a centered row of small, irregular brush marks below the 
 Use one mark per finite repetition; completed countdowns fade the marks from right to left.
 Fit the entire row within the available width, even for 99 repetitions.
 Idle shows all marks in ink; during running and paused sessions keep completed marks pale gray.
-Show only `∞` for unlimited sessions, without a numeric interval counter.
+Use a larger hand-painted infinity icon for unlimited sessions, without a numeric interval counter.
+For unlimited sessions hide the secondary elapsed / total time line beneath the countdown in every phase.
 Preserve spoken count and interval descriptions for accessibility.
 Keep hints subordinate to the painted Enso and timer.
 

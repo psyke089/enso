@@ -141,8 +141,8 @@ private fun RepetitionDisplay(state: TimerUiState) {
         else if (state.continuous) "Unlimited repetitions (0)" else "${state.repeatCount} repetitions"
     Box(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
         if (state.continuous) {
-            Text("∞", fontFamily = FontFamily.Serif, fontSize = 22.sp, color = FadedInk,
-                modifier = Modifier.semantics { contentDescription = description })
+            Image(painterResource(R.drawable.ink_infinity), contentDescription = description,
+                alpha = .8f, modifier = Modifier.size(48.dp, 32.dp))
         } else {
             Canvas(Modifier.widthIn(max = 300.dp).fillMaxWidth().height(28.dp).semantics {
                 contentDescription = description
@@ -187,19 +187,16 @@ private fun RepetitionDisplay(state: TimerUiState) {
 /** Session time sits quietly beneath the interval countdown inside the Enso. */
 @Composable
 private fun SessionTime(state: TimerUiState) {
+    if (state.continuous) return
     val active = state.phase != TimerPhase.Idle
-    val total = state.totalMs?.let(::formatTime) ?: "∞"
+    val total = state.totalMs?.let(::formatTime) ?: return
     val elapsed = formatTime(state.elapsedMs / 1000 * 1000)
     Box(Modifier.height(28.dp), contentAlignment = Alignment.Center) {
         Text(if (active) "$elapsed / $total" else total,
             color = FadedInk, fontFamily = FontFamily.Monospace, fontSize = 12.sp,
             modifier = Modifier.semantics {
-                contentDescription = when {
-                    active && state.totalMs == null -> "$elapsed elapsed, unlimited duration"
-                    active -> "$elapsed elapsed, $total total duration"
-                    state.totalMs == null -> "Unlimited duration"
-                    else -> "$total total duration"
-                }
+                contentDescription = if (active) "$elapsed elapsed, $total total duration"
+                    else "$total total duration"
             })
     }
 }
@@ -304,6 +301,7 @@ private fun CircleInput(state: TimerUiState, duration: (Int) -> Unit, repetition
     val currentDuration by rememberUpdatedState(duration)
     val currentRepetitions by rememberUpdatedState(repetitions)
     val currentRotateBrush by rememberUpdatedState(rotateBrush)
+    val currentState by rememberUpdatedState(state)
     Row(Modifier.fillMaxSize().clip(CircleShape)
         .semantics {
             contentDescription = "Timer circle"
@@ -321,6 +319,9 @@ private fun CircleInput(state: TimerUiState, duration: (Int) -> Unit, repetition
                 if ((down.position - center).getDistance() > radius) return@awaitEachGesture
                 down.consume()
                 val rotation = CircleRotation()
+                // Predict duration locally while persistence catches up with rapid motion.
+                var gestureDuration = currentState.selectedMs
+                val stepMs = currentState.settings.rotationStepMinutes * 60_000L
                 fun angle(position: Offset): Double? {
                     val relative = position - center
                     // Angles close to the center are unstable. Re-entering the ring starts afresh.
@@ -338,9 +339,15 @@ private fun CircleInput(state: TimerUiState, duration: (Int) -> Unit, repetition
                     }
                     if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
                     if (!cancelled && moved) {
-                        val steps = rotation.move(angle(change.position))
+                        val decreaseBudget = -((gestureDuration - DURATION_STEP + stepMs - 1) / stepMs).toInt()
+                        val increaseBudget = ((MAX_DURATION - gestureDuration + stepMs - 1) / stepMs).toInt()
+                        val steps = rotation.move(angle(change.position), decreaseBudget, increaseBudget)
                         currentRotateBrush(rotation.deltaDegrees)
-                        repeat(kotlin.math.abs(steps)) { currentDuration(if (steps > 0) 1 else -1) }
+                        repeat(kotlin.math.abs(steps)) {
+                            val direction = if (steps > 0) 1 else -1
+                            gestureDuration = (gestureDuration + direction * stepMs).coerceIn(DURATION_STEP, MAX_DURATION)
+                            currentDuration(direction)
+                        }
                     }
                     change.consume()
                     if (!change.pressed) {

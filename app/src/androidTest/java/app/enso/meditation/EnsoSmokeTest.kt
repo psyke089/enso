@@ -4,6 +4,7 @@ import android.view.WindowManager
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
 import kotlin.math.cos
 import kotlin.math.sin
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
@@ -41,6 +42,8 @@ class EnsoSmokeTest {
             awaitState { it.repeatCount == 2 }
             repeat(2) { compose.onNodeWithContentDescription("Decrease repetitions").performClick() }
             awaitState { it.continuous && it.totalMs == null }
+            compose.onNodeWithContentDescription("Unlimited duration").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Unlimited repetitions (0)").assertIsDisplayed()
             repeat(2) { compose.onNodeWithContentDescription("Increase repetitions").performClick() }
             awaitState { !it.continuous && it.totalMs == 2 * it.selectedMs }
             assertEquals(original.settings, state.settings)
@@ -156,7 +159,8 @@ class EnsoSmokeTest {
             val timeDescription = if (state.totalMs == null)
                 "${formatTime(state.elapsedMs / 1000 * 1000)} elapsed, unlimited duration"
                 else "${formatTime(state.elapsedMs / 1000 * 1000)} elapsed, ${formatTime(state.totalMs!!)} total duration"
-            compose.onNodeWithContentDescription(timeDescription).assertIsDisplayed()
+            if (state.continuous) compose.onNodeWithContentDescription(timeDescription).assertDoesNotExist()
+            else compose.onNodeWithContentDescription(timeDescription).assertIsDisplayed()
             compose.onNodeWithContentDescription("Timer circle").assertDoesNotExist()
             compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
             Thread.sleep(1_100)
@@ -240,6 +244,26 @@ class EnsoSmokeTest {
                 up()
             }
             awaitState { it.selectedMs == rotated - direction * 4 * DURATION_STEP }
+            while (state.selectedMs > DURATION_STEP) {
+                val before = state.selectedMs
+                controller.adjustDuration(-1)
+                awaitState { it.selectedMs < before }
+            }
+            val atMinimum = circle.captureToImage().asAndroidBitmap()
+            circle.performTouchInput {
+                val radius = width * .4f
+                fun point(degrees: Float): Offset {
+                    val angle = Math.toRadians(degrees.toDouble())
+                    return center + Offset(cos(angle).toFloat() * radius, sin(angle).toFloat() * radius)
+                }
+                down(point(-60f))
+                for (step in 1..13) moveTo(point(-60f - step * 5f), 25)
+                up()
+            }
+            compose.waitForIdle()
+            assertEquals(DURATION_STEP, state.selectedMs)
+            assertTrue("The Enso must stay still when decreasing at minimum duration",
+                atMinimum.sameAs(circle.captureToImage().asAndroidBitmap()))
         } finally {
             controller.changeSettings { it.copy(rotationStepMinutes = 1) }
             awaitState { it.settings.rotationStepMinutes == 1 }
