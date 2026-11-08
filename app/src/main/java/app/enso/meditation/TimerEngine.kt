@@ -20,6 +20,7 @@ data class EnsoSettings(
     val middleGongSound: GongChoice = GongChoice.Heart,
     val showSaying: Boolean = true,
     val rotationStepMinutes: Int = 5,
+    val showTime: Boolean = true,
 )
 
 enum class TimerPhase { Idle, Running, Paused }

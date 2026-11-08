@@ -7,7 +7,12 @@ class CircleRotation {
     private var previous: Double? = null
     private var pending = 0.0
 
+    /** Continuous visual movement, independent of the duration detents. */
+    var deltaDegrees: Float = 0f
+        private set
+
     fun move(angle: Double?): Int {
+        deltaDegrees = 0f
         val last = previous
         previous = angle
         if (angle == null) {
@@ -18,6 +23,7 @@ class CircleRotation {
         var delta = angle - last
         if (delta > PI) delta -= 2 * PI
         if (delta < -PI) delta += 2 * PI
+        deltaDegrees = (delta * 180 / PI).toFloat()
         pending += delta
         val steps = (pending / (PI / 12)).toInt()
         pending -= steps * (PI / 12)

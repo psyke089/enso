@@ -51,13 +51,13 @@ private const val ENSO_ROTATION_DEGREES = 154f
 
 /** The hand-painted Enso brush circle. The timer is laid over its empty center. */
 @Composable
-fun EnsoArtwork(modifier: Modifier = Modifier, paused: Boolean = false) {
+fun EnsoArtwork(modifier: Modifier = Modifier, paused: Boolean = false, rotationDegrees: Float = 0f) {
     Image(
         painter = painterResource(R.drawable.enso_brush),
         contentDescription = null,
         contentScale = ContentScale.Fit,
         alpha = if (paused) 0.55f else 0.92f,
-        modifier = modifier.rotate(ENSO_ROTATION_DEGREES),
+        modifier = modifier.rotate(ENSO_ROTATION_DEGREES + rotationDegrees),
     )
 }
 

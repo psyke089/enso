@@ -85,8 +85,8 @@ class EnsoSmokeTest {
         assertEquals(TimerPhase.Idle, state.phase)
         val original = state
         try {
-            controller.changeSettings { it.copy(showSaying = true, rotationStepMinutes = 5) }
-            awaitState { it.settings.showSaying && it.settings.rotationStepMinutes == 5 && it.saying.isNotEmpty() }
+            controller.changeSettings { it.copy(showSaying = true, rotationStepMinutes = 5, showTime = true) }
+            awaitState { it.settings.showSaying && it.settings.showTime && it.settings.rotationStepMinutes == 5 && it.saying.isNotEmpty() }
             compose.waitUntil(5_000) {
                 runCatching { compose.onNodeWithText(state.saying).assertIsDisplayed() }.isSuccess
             }
@@ -114,7 +114,19 @@ class EnsoSmokeTest {
             awaitState { it.settings.repeatGong != original.settings.repeatGong }
             assertEquals(original.repeatCount, state.repeatCount)
             assertEquals(original.continuous, state.continuous)
-            compose.onNodeWithText("Show Saying").performClick()
+            compose.onNodeWithText("Show Time").performScrollTo().performClick()
+            awaitState { !it.settings.showTime }
+            assertFalse(runBlocking { EnsoStore(compose.activity).load() }.settings.showTime)
+            compose.activityRule.scenario.recreate()
+            awaitState { !it.settings.showTime }
+            compose.onNodeWithContentDescription("Close settings").performClick()
+            compose.onNodeWithContentDescription("${formatTime(state.selectedMs)} selected").assertDoesNotExist()
+            compose.onNodeWithContentDescription(if (state.continuous) "Unlimited repetitions (0)"
+                else "${state.repeatCount} repetitions").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Settings").performClick()
+            compose.onNodeWithText("Show Time").performScrollTo().performClick()
+            awaitState { it.settings.showTime }
+            compose.onNodeWithText("Show Saying").performScrollTo().performClick()
             awaitState { !it.settings.showSaying }
             compose.onNodeWithText("Vibration").performClick()
             awaitState { it.settings.vibration != original.settings.vibration }

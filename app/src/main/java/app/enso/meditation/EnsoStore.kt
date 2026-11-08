@@ -27,6 +27,7 @@ class EnsoStore(private val context: Context) {
     private val startSound = stringPreferencesKey("start_gong_sound")
     private val endSound = stringPreferencesKey("end_gong_sound")
     private val middleSound = stringPreferencesKey("middle_gong_sound")
+    private val showTime = booleanPreferencesKey("show_time")
     private val showSaying = booleanPreferencesKey("show_saying")
     private val sayingIndex = intPreferencesKey("saying_index")
     private val interval = longPreferencesKey("session_interval_ms")
@@ -52,7 +53,8 @@ class EnsoStore(private val context: Context) {
                 GongChoice.fromName(p[startSound]) ?: defaults.startGongSound,
                 GongChoice.fromName(p[endSound]) ?: defaults.endGongSound,
                 GongChoice.fromName(p[middleSound]) ?: defaults.middleGongSound,
-                p[showSaying] ?: true, p[rotationStep]?.takeIf { it in ROTATION_STEP_OPTIONS } ?: 5), session, p[sayingIndex] ?: -1,
+                p[showSaying] ?: true, p[rotationStep]?.takeIf { it in ROTATION_STEP_OPTIONS } ?: 5,
+                p[showTime] ?: true), session, p[sayingIndex] ?: -1,
             p[repeatCount] ?: 1, p[repeatForever] ?: p[legacyContinuous] ?: false)
     }
 
@@ -71,6 +73,7 @@ class EnsoStore(private val context: Context) {
             p[startSound] = snapshot.settings.startGongSound.name
             p[endSound] = snapshot.settings.endGongSound.name
             p[middleSound] = snapshot.settings.middleGongSound.name
+            p[showTime] = snapshot.settings.showTime
             p[showSaying] = snapshot.settings.showSaying
             p[sayingIndex] = snapshot.sayingIndex
             val session = snapshot.session

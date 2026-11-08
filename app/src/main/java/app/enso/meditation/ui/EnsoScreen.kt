@@ -271,12 +271,14 @@ private fun Saying(text: String, visible: Boolean) {
 @Composable
 private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit,
     adjustRepetitions: (Int) -> Unit, modifier: Modifier) {
+    var brushRotation by rememberSaveable { mutableFloatStateOf(0f) }
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
-        EnsoArtwork(Modifier.fillMaxSize(), paused = state.phase == TimerPhase.Paused)
+        EnsoArtwork(Modifier.fillMaxSize(), paused = state.phase == TimerPhase.Paused,
+            rotationDegrees = brushRotation)
         val fontScale = LocalDensity.current.fontScale
         val textSize = maxWidth.value * (if (state.remainingMs > 3_599_000) .108f else .157f) /
             (fontScale / 1.25f).coerceAtLeast(1f)
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        if (state.settings.showTime) Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(6.dp))
             Text(formatTime(state.remainingMs), fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Light, fontSize = textSize.sp, color = Ink,
@@ -287,7 +289,9 @@ private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit,
             SessionTime(state)
         }
         if (state.ready && state.phase == TimerPhase.Idle) {
-            CircleInput(state, adjustDuration, adjustRepetitions)
+            CircleInput(state, adjustDuration, adjustRepetitions) { delta ->
+                brushRotation = (brushRotation + delta) % 360f
+            }
         }
 
     }
@@ -295,9 +299,11 @@ private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit,
 
 /** One recognizer owns the whole circle, including gestures crossing between halves. */
 @Composable
-private fun CircleInput(state: TimerUiState, duration: (Int) -> Unit, repetitions: (Int) -> Unit) {
+private fun CircleInput(state: TimerUiState, duration: (Int) -> Unit, repetitions: (Int) -> Unit,
+    rotateBrush: (Float) -> Unit) {
     val currentDuration by rememberUpdatedState(duration)
     val currentRepetitions by rememberUpdatedState(repetitions)
+    val currentRotateBrush by rememberUpdatedState(rotateBrush)
     Row(Modifier.fillMaxSize().clip(CircleShape)
         .semantics {
             contentDescription = "Timer circle"
@@ -333,6 +339,7 @@ private fun CircleInput(state: TimerUiState, duration: (Int) -> Unit, repetition
                     if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
                     if (!cancelled && moved) {
                         val steps = rotation.move(angle(change.position))
+                        currentRotateBrush(rotation.deltaDegrees)
                         repeat(kotlin.math.abs(steps)) { currentDuration(if (steps > 0) 1 else -1) }
                     }
                     change.consume()
@@ -452,6 +459,9 @@ private fun SettingsPanel(
         }
         Setting("Vibration", settings.vibration) { value ->
             changeSettings { it.copy(vibration = value) }
+        }
+        Setting("Show Time", settings.showTime) { value ->
+            changeSettings { it.copy(showTime = value) }
         }
         Setting("Show Saying", settings.showSaying) { value ->
             changeSettings { it.copy(showSaying = value) }

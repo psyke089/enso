@@ -11,8 +11,10 @@ class CircleRotationTest {
         val rotation = CircleRotation()
         assertEquals(0, rotation.move(0.0))
         assertEquals(0, rotation.move(radians(8.0)))
+        assertEquals(8f, rotation.deltaDegrees, .001f)
         assertEquals(1, rotation.move(radians(16.0)))
         assertEquals(-1, rotation.move(radians(-1.0)))
+        assertEquals(-17f, rotation.deltaDegrees, .001f)
     }
 
     @Test fun crossingAngleSeamWorksInBothDirections() {
@@ -20,6 +22,7 @@ class CircleRotationTest {
             val rotation = CircleRotation()
             rotation.move(radians(170.0 * direction))
             assertEquals(direction, rotation.move(radians(-170.0 * direction)))
+            assertEquals(20f * direction, rotation.deltaDegrees, .001f)
         }
     }
 
@@ -28,7 +31,9 @@ class CircleRotationTest {
         rotation.move(0.0)
         rotation.move(radians(10.0))
         assertEquals(0, rotation.move(null))
+        assertEquals(0f, rotation.deltaDegrees, 0f)
         assertEquals(0, rotation.move(PI))
+        assertEquals(0f, rotation.deltaDegrees, 0f)
         assertEquals(0, rotation.move(radians(175.0)))
     }
 

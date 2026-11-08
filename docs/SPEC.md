@@ -280,6 +280,9 @@ The large Enso circle itself is the duration selector.
 # 11. Duration Selection
 
 While Idle, trace the Enso clockwise to increase duration and counterclockwise to decrease it.
+The painted circle follows the finger continuously during adjustment, while the text stays upright.
+Keep its last orientation after release and while running or paused; do not animate it during countdown.
+Preserve the orientation across activity recreation.
 Each 15° of rotation changes the duration by the configured minute step.
 Settings offers 1, 2, 5, 10 and 15 minutes per step; default: 5. Persist this preference locally.
 Duration remains bounded from 5 minutes to 24 hours, with whole-minute precision.
@@ -544,6 +547,9 @@ Show a discreet total duration inside the Enso, just beneath the interval countd
 and elapsed / total time. Unlimited sessions show elapsed time / infinity.
 Show no separate progress line above Start. Pause freezes elapsed time and progress;
 keep the time display in place without a visible Paused label.
+Settings provides Show Time (default ON), persisted locally. When OFF, hide both the
+interval countdown and elapsed / total time in every phase; keep the Enso, repetition marks,
+and session controls visible. The timer continues normally.
 Use hand-painted settings and reset icons matching the existing ink play/pause controls.
 Reset replaces the visible Stop control and returns the session to Idle at its selected duration,
 with repetition marks ready for a new session.
