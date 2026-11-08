@@ -7,9 +7,9 @@
 <p align="center">A quiet, offline meditation timer and interval gong for Android.</p>
 
 <p align="center">
-  <a href="https://github.com/psyke089/enso/releases"><img src="https://img.shields.io/badge/release-v1.2.0-blue?logo=codeberg&logoColor=white" alt="Release v1.2.0"></a>
-  <img src="https://img.shields.io/badge/vibe_coded-100%25-critical?logo=codeberg&logoColor=white" alt="No human review">
-  <img src="https://img.shields.io/badge/human_review-none-green?logo=codeberg&logoColor=white" alt="Human review: none">
+  <a href="https://github.com/psyke089/enso/releases"><img src="https://img.shields.io/badge/release-v1.3.0-blue?logo=github&logoColor=white" alt="Release v1.3.0"></a>
+  <img src="https://img.shields.io/badge/vibe_coded-100%25-critical?logo=github&logoColor=white" alt="No human review">
+  <img src="https://img.shields.io/badge/human_review-none-green?logo=github&logoColor=white" alt="Human review: none">
 </p>
 
 <p align="center">
