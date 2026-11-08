@@ -290,7 +290,12 @@ Changing the step does not round or otherwise change the selected duration or ac
 # 12. Interaction Hints
 
 Keep the circle free of instructional text.
-Display the selected repetition count below the circle; display `0 · ∞` for unlimited.
+Display repetitions as a centered row of small, irregular brush marks below the circle.
+Use one mark per finite repetition; completed countdowns fade the marks from right to left.
+Fit the entire row within the available width, even for 99 repetitions.
+Idle shows all marks in ink; during running and paused sessions keep completed marks pale gray.
+Show only `∞` for unlimited sessions, without a numeric interval counter.
+Preserve spoken count and interval descriptions for accessibility.
 Keep hints subordinate to the painted Enso and timer.
 
 ---
@@ -535,8 +540,8 @@ From 0, right goes to 1 and left stays at 0. Default: one countdown.
 Selection persists locally and is locked while running or paused.
 The stored finite count stays valid (1–99); unlimited mode uses the existing persisted boolean.
 
-Show a discreet total duration below the selector. During a session, show the current
-interval number and elapsed / total time. Unlimited sessions show elapsed time / infinity.
+Show a discreet total duration below the selector. During a session, show completed intervals through the faded brush marks
+and elapsed / total time. Unlimited sessions show elapsed time / infinity.
 A thin, organic ink line shows total progress for finite sessions and current-interval
 progress for unlimited sessions. Pause freezes elapsed time and progress.
 Keep this subordinate to the painted Enso; avoid a conventional circular progress ring.

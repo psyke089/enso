@@ -133,19 +133,56 @@ fun EnsoScreen(
     }
 }
 
-/** The circle owns selection; this line quietly reports the selected count. */
+/** A quiet ink tally. Completed intervals fade from the right, leaving the next ones dark. */
 @Composable
 private fun RepetitionDisplay(state: TimerUiState) {
     val active = state.phase != TimerPhase.Idle
-    Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
-        Text(if (active) "${state.completedIntervals + 1} / ${if (state.continuous) "∞" else state.repeatCount}"
-            else if (state.continuous) "0 · ∞" else "${state.repeatCount}×",
-            fontFamily = FontFamily.Serif, fontSize = 18.sp, color = FadedInk,
-            modifier = Modifier.semantics {
-                contentDescription = if (active)
-                    "Interval ${state.completedIntervals + 1} of ${if (state.continuous) "unlimited" else state.repeatCount}"
-                else if (state.continuous) "Unlimited repetitions (0)" else "${state.repeatCount} repetitions"
-            })
+    val completed = if (active) state.completedIntervals.coerceIn(0, state.repeatCount.toLong()).toInt() else 0
+    val description = if (active)
+        "Interval ${state.completedIntervals + 1} of ${if (state.continuous) "unlimited" else state.repeatCount}"
+        else if (state.continuous) "Unlimited repetitions (0)" else "${state.repeatCount} repetitions"
+    Box(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
+        if (state.continuous) {
+            Text("∞", fontFamily = FontFamily.Serif, fontSize = 22.sp, color = FadedInk,
+                modifier = Modifier.semantics { contentDescription = description })
+        } else {
+            Canvas(Modifier.widthIn(max = 300.dp).fillMaxWidth().height(28.dp).semantics {
+                contentDescription = description
+                stateDescription = "$completed completed, ${state.repeatCount - completed} remaining"
+            }) {
+                val spacing = minOf(15.dp.toPx(), size.width / state.repeatCount)
+                val start = (size.width - spacing * state.repeatCount) / 2
+                repeat(state.repeatCount) { index ->
+                    // Fixed variations keep each brush mark organic without changing on redraw.
+                    val variant = index % 7
+                    val x = start + spacing * (index + .5f)
+                    val top = size.height * (.17f + variant % 3 * .035f)
+                    val bottom = size.height * (.84f - variant % 2 * .045f)
+                    val width = minOf((3.2f + variant % 3 * .35f).dp.toPx(), spacing * .44f)
+                    val lean = width * (.35f + variant % 4 * .16f)
+                    val ink = if (index >= state.repeatCount - completed) FadedInk.copy(alpha = .24f)
+                        else Ink.copy(alpha = .78f + variant % 3 * .055f)
+                    val mark = Path().apply {
+                        moveTo(x + lean, top)
+                        cubicTo(x + lean + width * .65f, top - width * .4f,
+                            x + width * .5f, bottom - width * 1.3f, x + width * .15f, bottom)
+                        lineTo(x - width * .4f, bottom + width * .25f)
+                        cubicTo(x - width * .7f, bottom - width,
+                            x - width * .35f, top + width, x + lean, top)
+                        close()
+                    }
+                    drawPath(mark, ink)
+                    // A fine dry-brush seam and a thin trailing hair soften the solid silhouette.
+                    drawLine(Paper.copy(alpha = .45f), Offset(x + lean * .6f, top + width),
+                        Offset(x - width * .08f, bottom - width * .6f),
+                        strokeWidth = minOf(.45.dp.toPx(), width * .15f))
+                    drawLine(ink.copy(alpha = ink.alpha * .55f),
+                        Offset(x + width * .65f, top + width * 1.8f),
+                        Offset(x + width * .2f, bottom + width * .8f),
+                        strokeWidth = minOf(.5.dp.toPx(), width * .17f), cap = StrokeCap.Round)
+                }
+            }
+        }
     }
 }
 
