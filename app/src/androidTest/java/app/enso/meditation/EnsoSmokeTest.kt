@@ -63,7 +63,7 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription("Interval 1 of 2").assertIsDisplayed()
             assertEquals(paused.elapsedMs, state.elapsedMs)
             assertEquals(paused.progress, state.progress, 0f)
-            compose.onNodeWithContentDescription("Stop").performClick()
+            compose.onNodeWithContentDescription("Reset").performClick()
             awaitState { it.phase == TimerPhase.Idle }
             assertEquals(2, state.repeatCount)
             assertNull(runBlocking { EnsoStore(compose.activity).load() }.session)
@@ -139,7 +139,12 @@ class EnsoSmokeTest {
             awaitState { it.phase == TimerPhase.Paused }
             assertEquals(runningSaying, state.saying)
             val paused = state.remainingMs
-            compose.onNodeWithText("Paused").assertIsDisplayed()
+            compose.onNodeWithText("Paused").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Session progress").assertDoesNotExist()
+            val timeDescription = if (state.totalMs == null)
+                "${formatTime(state.elapsedMs / 1000 * 1000)} elapsed, unlimited duration"
+                else "${formatTime(state.elapsedMs / 1000 * 1000)} elapsed, ${formatTime(state.totalMs!!)} total duration"
+            compose.onNodeWithContentDescription(timeDescription).assertIsDisplayed()
             compose.onNodeWithContentDescription("Timer circle").assertDoesNotExist()
             compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
             Thread.sleep(1_100)
@@ -153,11 +158,11 @@ class EnsoSmokeTest {
             Thread.sleep(1_200)
             assertTrue(state.remainingMs < beforeBackground)
             compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-            compose.onNodeWithContentDescription("Stop").performClick()
+            compose.onNodeWithContentDescription("Reset").performClick()
             awaitState { it.phase == TimerPhase.Idle }
             assertEquals(original.selectedMs, state.remainingMs)
             compose.onNodeWithContentDescription("Start").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Stop").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Reset").assertDoesNotExist()
             compose.runOnIdle {
                 assertEquals(0, compose.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }

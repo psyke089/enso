@@ -265,7 +265,7 @@ Primary elements:
 - large Enso brush circle
 - selected or remaining time inside the circle
 - minimal Start / Pause / Resume control
-- Stop control while a session is active
+- Reset control while a session is active
 
 Do not show preset duration buttons.
 
@@ -435,7 +435,7 @@ While running:
 - show remaining time prominently
 - disable duration adjustment
 - provide Pause
-- provide Stop
+- provide Reset
 - keep all secondary UI visually quiet
 
 The running screen should become even calmer than the idle screen.
@@ -479,7 +479,7 @@ Resume must not restart the full selected duration.
 
 ---
 
-# 22. Stop
+# 22. Reset
 
 Stopping an active or paused meditation must:
 
@@ -494,7 +494,7 @@ Stopping manually must NOT play the End Gong.
 
 After stopping, Enso returns to its calm Idle state.
 
-A separate Reset button is unnecessary if Stop already produces this behavior.
+The hand-painted Reset control performs this stop-and-return-to-start behavior.
 
 ---
 
@@ -540,10 +540,13 @@ From 0, right goes to 1 and left stays at 0. Default: one countdown.
 Selection persists locally and is locked while running or paused.
 The stored finite count stays valid (1–99); unlimited mode uses the existing persisted boolean.
 
-Show a discreet total duration below the selector. During a session, show completed intervals through the faded brush marks
+Show a discreet total duration inside the Enso, just beneath the interval countdown. During a session, show completed intervals through the faded brush marks
 and elapsed / total time. Unlimited sessions show elapsed time / infinity.
-A thin, organic ink line shows total progress for finite sessions and current-interval
-progress for unlimited sessions. Pause freezes elapsed time and progress.
+Show no separate progress line above Start. Pause freezes elapsed time and progress;
+keep the time display in place without a visible Paused label.
+Use hand-painted settings and reset icons matching the existing ink play/pause controls.
+Reset replaces the visible Stop control and returns the session to Idle at its selected duration,
+with repetition marks ready for a new session.
 Keep this subordinate to the painted Enso; avoid a conventional circular progress ring.
 
 ---
@@ -930,13 +933,13 @@ Running:
 
 - duration locked
 - Pause available
-- Stop available
+- Reset available
 
 Paused:
 
 - duration locked
 - Resume available
-- Stop available
+- Reset available
 
 ---
 

@@ -40,7 +40,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -88,7 +87,6 @@ fun EnsoScreen(
                 Spacer(Modifier.height(topSpace))
                 TimerCircle(state, adjustDuration, adjustRepetitions, Modifier.size(circleSize))
                 RepetitionDisplay(state)
-                SessionProgress(state)
                 Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
                 InkAction(
                     label = when (state.phase) { TimerPhase.Idle -> "Start"; TimerPhase.Running -> "Pause"; TimerPhase.Paused -> "Resume" },
@@ -101,7 +99,7 @@ fun EnsoScreen(
                     }) },
                 )
                 Box(Modifier.height(52.dp), contentAlignment = Alignment.Center) {
-                    if (state.phase != TimerPhase.Idle) InkAction("Stop", R.drawable.ink_stop,
+                    if (state.phase != TimerPhase.Idle) InkAction("Reset", R.drawable.ink_reset,
                         enabled = state.ready, secondary = true) { action(SessionAction.Stop) }
                 }
                 if (state.storageWarning) Text("Changes could not be saved on this device.",
@@ -186,16 +184,16 @@ private fun RepetitionDisplay(state: TimerUiState) {
     }
 }
 
-/** A narrow, slightly uneven ink wash; the painted Enso remains the visual focus. */
+/** Session time sits quietly beneath the interval countdown inside the Enso. */
 @Composable
-private fun SessionProgress(state: TimerUiState) {
+private fun SessionTime(state: TimerUiState) {
     val active = state.phase != TimerPhase.Idle
     val total = state.totalMs?.let(::formatTime) ?: "∞"
     val elapsed = formatTime(state.elapsedMs / 1000 * 1000)
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Box(Modifier.height(28.dp), contentAlignment = Alignment.Center) {
         Text(if (active) "$elapsed / $total" else total,
             color = FadedInk, fontFamily = FontFamily.Monospace, fontSize = 12.sp,
-            modifier = Modifier.padding(top = 2.dp, bottom = 8.dp).semantics {
+            modifier = Modifier.semantics {
                 contentDescription = when {
                     active && state.totalMs == null -> "$elapsed elapsed, unlimited duration"
                     active -> "$elapsed elapsed, $total total duration"
@@ -203,46 +201,19 @@ private fun SessionProgress(state: TimerUiState) {
                     else -> "$total total duration"
                 }
             })
-        Canvas(Modifier.width(156.dp).height(4.dp).semantics {
-            contentDescription = if (state.continuous) "Interval progress" else "Session progress"
-            progressBarRangeInfo = ProgressBarRangeInfo(state.progress, 0f..1f)
-        }) {
-            val stroke = Path().apply {
-                moveTo(0f, size.height * .6f)
-                lineTo(size.width * .12f, size.height * .25f)
-                lineTo(size.width * .54f, size.height * .38f)
-                lineTo(size.width * .91f, size.height * .2f)
-                lineTo(size.width, size.height * .5f)
-                lineTo(size.width * .83f, size.height * .72f)
-                lineTo(size.width * .39f, size.height * .8f)
-                close()
-            }
-            drawPath(stroke, FadedInk.copy(alpha = .16f))
-            clipRect(right = size.width * state.progress) {
-                drawPath(stroke, FadedInk.copy(alpha = .72f))
-            }
-        }
     }
 }
 
-/** Discreet settings affordance: three brushed ink strokes, no Material button chrome. */
+/** Same hand-painted charcoal and transparent paper as the session controls. */
 @Composable
 private fun InkSettingsButton(onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    Canvas(Modifier.size(44.dp)
-        .clip(CircleShape)
+    Box(Modifier.size(44.dp).clip(CircleShape)
         .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-        .semantics { contentDescription = "Settings" }
-        .padding(11.dp)) {
-        for (i in 0..2) {
-            val y = size.height * (.22f + i * .28f)
-            val x = size.width * if (i == 1) .65f else .35f
-            drawLine(Ink.copy(alpha = if (pressed) .45f else .7f).let { if (i == 2) it.copy(alpha = it.alpha * .7f) else it },
-                Offset(0f, y), Offset(size.width, y), 1.4.dp.toPx(), cap = StrokeCap.Round)
-            drawCircle(Paper, 3.dp.toPx(), Offset(x, y))
-            drawCircle(FadedInk, 3.dp.toPx(), Offset(x, y), style = Stroke(1.2.dp.toPx()))
-        }
+        .semantics { contentDescription = "Settings" }, contentAlignment = Alignment.Center) {
+        Image(painterResource(R.drawable.ink_settings), contentDescription = null,
+            alpha = if (pressed) .45f else .8f, modifier = Modifier.fillMaxSize())
     }
 }
 
@@ -311,11 +282,9 @@ private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit,
                 fontWeight = FontWeight.Light, fontSize = textSize.sp, color = Ink,
                 maxLines = 1, modifier = Modifier.semantics {
                     contentDescription = "${formatTime(state.remainingMs)} ${if (state.phase == TimerPhase.Idle) "selected" else "remaining"}"
+                    if (state.phase == TimerPhase.Paused) stateDescription = "Paused"
                 })
-            Box(Modifier.height(28.dp), contentAlignment = Alignment.Center) {
-                if (state.phase == TimerPhase.Paused) Text("Paused", color = FadedInk,
-                    fontSize = 13.sp, letterSpacing = 1.sp)
-            }
+            SessionTime(state)
         }
         if (state.ready && state.phase == TimerPhase.Idle) {
             CircleInput(state, adjustDuration, adjustRepetitions)
