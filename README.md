@@ -20,8 +20,8 @@ Enso is a minimal meditation timer built with Kotlin and Jetpack Compose. It run
 
 ## What it does
 
-- **Set any duration** from 5 minutes to 24 hours. Tap the left or right half of the ink circle to subtract or add 5 minutes; hold to repeat with gradually increasing speed. The duration is saved after every adjustment.
-- **Choose repetitions below the circle.** Run the countdown once, 2–99 times, or indefinitely. A quiet total-duration display and fine ink progress line track the session.
+- **Set any duration** from 5 minutes to 24 hours. Trace the ink circle clockwise to increase the duration, counterclockwise to decrease it. Choose 1, 2, 5, 10 or 15 minutes per step in Settings (default: 5). The duration is saved after every adjustment.
+- **Tap the circle to choose repetitions.** Left subtracts one, right adds one, down to 0 for unlimited repetitions. The count is displayed below the circle. A quiet total-duration display and fine ink progress line track the session.
 - **One calm screen** for Start, Pause, Resume and Stop, using hand-drawn sumi ink controls with accessible action labels.
 - **Choose your gongs.** Separate Start, End and Repeat gongs, each pickable from nine bundled bell recordings and previewable in the settings sheet.
 - **Rotating sayings.** Twenty original Zen-inspired lines appear on launch, at the start of each session and at every repeated interval, with a soft fade and never an immediate repeat.

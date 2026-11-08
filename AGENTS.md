@@ -45,4 +45,4 @@ Keep device interaction non-destructive and limited to Enso, following [SPEC.md]
 - Gong recordings live in `app/src/main/res/raw`; generated ink control icons live in `app/src/main/res/drawable-nodpi`. See [docs/ARTWORK.md](docs/ARTWORK.md).
 - Timer behaviour is a deterministic state machine driven by `elapsedRealtime()`; preserve the existing persistence and restoration semantics. Reboot continuation is intentionally unsupported.
 - The UI intentionally stays in the warm washi/paper theme regardless of system dark mode.
-- Tests: `TimerEngineTest`, `DurationHoldTest` and `SayingsTest` run on the JVM; `EnsoSmokeTest` is instrumented.
+- Tests: `TimerEngineTest`, `CircleRotationTest` and `SayingsTest` run on the JVM; `EnsoSmokeTest` is instrumented.

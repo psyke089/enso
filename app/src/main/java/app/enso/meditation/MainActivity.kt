@@ -52,7 +52,7 @@ class MainActivity : ComponentActivity() {
             val state by controller.state.collectAsState()
             EnsoTheme {
                 EnsoScreen(state, controller::adjustDuration, controller::adjustRepetitions,
-                    controller::setRepeatForever, controller::changeSettings,
+                    controller::changeSettings,
                     controller::previewGong) { action ->
                     MeditationService.send(this, action)
                     if (action == SessionAction.Start) requestNotifications()

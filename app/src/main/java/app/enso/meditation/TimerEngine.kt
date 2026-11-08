@@ -2,6 +2,8 @@ package app.enso.meditation
 
 import java.util.Locale
 
+val ROTATION_STEP_OPTIONS = listOf(1, 2, 5, 10, 15)
+
 const val DURATION_STEP = 5 * 60_000L
 const val MAX_DURATION = 24 * 60 * 60_000L
 const val DEFAULT_DURATION = 10 * 60_000L
@@ -17,6 +19,7 @@ data class EnsoSettings(
     val endGongSound: GongChoice = GongChoice.Bell,
     val middleGongSound: GongChoice = GongChoice.Heart,
     val showSaying: Boolean = true,
+    val rotationStepMinutes: Int = 5,
 )
 
 enum class TimerPhase { Idle, Running, Paused }
@@ -64,13 +67,14 @@ sealed interface TimerEvent {
 /** Pure state machine. Its owner serializes calls and supplies a monotonic clock. */
 class TimerEngine(snapshot: TimerSnapshot = TimerSnapshot(), nowMs: Long = 0) {
     var snapshot: TimerSnapshot = snapshot.copy(selectedMs = normalizeDuration(snapshot.selectedMs),
-        repeatCount = snapshot.repeatCount.coerceIn(1, MAX_REPETITIONS))
+        repeatCount = snapshot.repeatCount.coerceIn(1, MAX_REPETITIONS),
+        settings = normalizeSettings(snapshot.settings))
         private set
 
     init {
         val session = snapshot.session
         if (session != null && (session.intervalMs !in DURATION_STEP..MAX_DURATION ||
-                session.intervalMs % DURATION_STEP != 0L || session.deadlineMs < 0 ||
+                session.intervalMs % 60_000L != 0L || session.deadlineMs < 0 ||
                 session.repeatCount !in 1..MAX_REPETITIONS || session.completedIntervals < 0 ||
                 (!session.continuous && session.completedIntervals >= session.repeatCount) ||
                 (session.pausedRemainingMs == null && session.deadlineMs - nowMs > session.intervalMs) ||
@@ -84,19 +88,21 @@ class TimerEngine(snapshot: TimerSnapshot = TimerSnapshot(), nowMs: Long = 0) {
     fun adjustDuration(direction: Int) {
         if (snapshot.session != null) return
         snapshot = snapshot.copy(selectedMs =
-            (snapshot.selectedMs + direction.coerceIn(-1, 1) * DURATION_STEP)
+            (snapshot.selectedMs + direction.coerceIn(-1, 1) * snapshot.settings.rotationStepMinutes * 60_000L)
                 .coerceIn(DURATION_STEP, MAX_DURATION))
     }
 
     fun updateSettings(settings: EnsoSettings) {
-        snapshot = snapshot.copy(settings = settings)
+        snapshot = snapshot.copy(settings = normalizeSettings(settings))
     }
 
     fun adjustRepetitions(direction: Int) {
         if (snapshot.session != null) return
-        snapshot = snapshot.copy(repeatCount =
-            (snapshot.repeatCount + direction.coerceIn(-1, 1)).coerceIn(1, MAX_REPETITIONS),
-            repeatForever = false)
+        if (direction == 0) return
+        val count = if (snapshot.repeatForever) 0 else snapshot.repeatCount
+        val next = (count + direction.coerceIn(-1, 1)).coerceIn(0, MAX_REPETITIONS)
+        snapshot = snapshot.copy(repeatCount = if (next == 0) snapshot.repeatCount else next,
+            repeatForever = next == 0)
     }
 
     fun setRepeatForever(forever: Boolean) {
@@ -181,7 +187,7 @@ class TimerEngine(snapshot: TimerSnapshot = TimerSnapshot(), nowMs: Long = 0) {
 }
 
 fun normalizeDuration(value: Long): Long =
-    (value.coerceIn(DURATION_STEP, MAX_DURATION) / DURATION_STEP) * DURATION_STEP
+    (value.coerceIn(DURATION_STEP, MAX_DURATION) / 60_000L) * 60_000L
 
 fun formatTime(milliseconds: Long): String {
     val seconds = (milliseconds.coerceAtLeast(0) + 999) / 1000
@@ -189,25 +195,6 @@ fun formatTime(milliseconds: Long): String {
     else String.format(Locale.ROOT, "%02d:%02d", seconds / 60, seconds % 60)
 }
 
-/** One press = one step, followed by increasingly frequent five-minute steps. */
-class DurationHold(private val direction: Int) {
-    private var active = false
-    private var nextMs = 0L
-    private var startedMs = 0L
-
-    fun begin(nowMs: Long): Int {
-        active = true
-        startedMs = nowMs
-        nextMs = nowMs + 450
-        return direction.coerceIn(-1, 1)
-    }
-
-    fun repeat(nowMs: Long): Int {
-        if (!active || nowMs < nextMs) return 0
-        val held = nowMs - startedMs
-        nextMs = nowMs + when { held < 1500 -> 280; held < 3000 -> 140; else -> 65 }
-        return direction.coerceIn(-1, 1)
-    }
-
-    fun end() { active = false }
-}
+private fun normalizeSettings(settings: EnsoSettings) = settings.copy(
+    rotationStepMinutes = settings.rotationStepMinutes.takeIf { it in ROTATION_STEP_OPTIONS } ?: 5,
+)

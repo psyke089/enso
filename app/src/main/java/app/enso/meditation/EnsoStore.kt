@@ -14,6 +14,7 @@ private val Context.ensoStore by preferencesDataStore(
 
 /** One atomic local record for preferences and reconstructable session anchors. */
 class EnsoStore(private val context: Context) {
+    private val rotationStep = intPreferencesKey("rotation_step_minutes")
     private val duration = longPreferencesKey("duration_ms")
     private val start = booleanPreferencesKey("start_gong")
     private val end = booleanPreferencesKey("end_gong")
@@ -51,12 +52,13 @@ class EnsoStore(private val context: Context) {
                 GongChoice.fromName(p[startSound]) ?: defaults.startGongSound,
                 GongChoice.fromName(p[endSound]) ?: defaults.endGongSound,
                 GongChoice.fromName(p[middleSound]) ?: defaults.middleGongSound,
-                p[showSaying] ?: true), session, p[sayingIndex] ?: -1,
+                p[showSaying] ?: true, p[rotationStep]?.takeIf { it in ROTATION_STEP_OPTIONS } ?: 5), session, p[sayingIndex] ?: -1,
             p[repeatCount] ?: 1, p[repeatForever] ?: p[legacyContinuous] ?: false)
     }
 
     suspend fun save(snapshot: TimerSnapshot) {
         context.ensoStore.edit { p ->
+            p[rotationStep] = snapshot.settings.rotationStepMinutes
             p[duration] = snapshot.selectedMs
             p[start] = snapshot.settings.startGong
             p[end] = snapshot.settings.endGong

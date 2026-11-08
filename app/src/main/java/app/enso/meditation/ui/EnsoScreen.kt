@@ -1,6 +1,5 @@
 package app.enso.meditation.ui
 
-import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
@@ -23,13 +22,11 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -58,17 +55,16 @@ import androidx.compose.ui.unit.sp
 import app.enso.meditation.*
 import app.enso.meditation.R
 import app.enso.meditation.ui.theme.*
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import kotlin.math.atan2
+import kotlin.math.hypot
 
 @Composable
 fun EnsoScreen(
     state: TimerUiState,
     adjustDuration: (Int) -> Unit,
     adjustRepetitions: (Int) -> Unit,
-    setRepeatForever: (Boolean) -> Unit,
     changeSettings: ((EnsoSettings) -> EnsoSettings) -> Unit,
     previewGong: (GongChoice) -> Unit,
     action: (SessionAction) -> Unit,
@@ -90,8 +86,8 @@ fun EnsoScreen(
                     InkSettingsButton { settingsOpen = true }
                 }
                 Spacer(Modifier.height(topSpace))
-                TimerCircle(state, adjustDuration, Modifier.size(circleSize))
-                RepetitionControl(state, adjustRepetitions, setRepeatForever)
+                TimerCircle(state, adjustDuration, adjustRepetitions, Modifier.size(circleSize))
+                RepetitionDisplay(state)
                 SessionProgress(state)
                 Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
                 InkAction(
@@ -137,63 +133,19 @@ fun EnsoScreen(
     }
 }
 
-/** A small ink selector: finite count and infinity share the same quiet baseline. */
+/** The circle owns selection; this line quietly reports the selected count. */
 @Composable
-private fun RepetitionControl(state: TimerUiState, adjust: (Int) -> Unit, forever: (Boolean) -> Unit) {
-    if (state.phase != TimerPhase.Idle) {
-        Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
-            Text("${state.completedIntervals + 1} / ${if (state.continuous) "∞" else state.repeatCount}",
-                fontFamily = FontFamily.Serif, fontSize = 18.sp, color = FadedInk,
-                modifier = Modifier.semantics {
-                    contentDescription = "Interval ${state.completedIntervals + 1} of ${if (state.continuous) "unlimited" else state.repeatCount}"
-                })
-        }
-        return
-    }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        RepetitionButton("−", "Decrease repetitions", state.ready && (state.continuous || state.repeatCount > 1)) { adjust(-1) }
-        Box(Modifier.widthIn(min = 56.dp).height(48.dp)
-            .selectable(selected = !state.continuous, enabled = state.ready, role = Role.RadioButton,
-                interactionSource = remember { MutableInteractionSource() }, indication = null,
-                onClick = { forever(false) })
-            .semantics {
-                contentDescription = "Finite repetitions"
-                stateDescription = "${state.repeatCount} repetitions"
-            }, contentAlignment = Alignment.Center) {
-            Text("${state.repeatCount}×", fontFamily = FontFamily.Serif, fontSize = 20.sp,
-                color = if (state.continuous) FadedInk else Ink)
-            SelectionStroke(!state.continuous, Modifier.align(Alignment.BottomCenter))
-        }
-        RepetitionButton("+", "Increase repetitions", state.ready && (state.continuous || state.repeatCount < MAX_REPETITIONS)) { adjust(1) }
-        Spacer(Modifier.width(12.dp))
-        Box(Modifier.size(48.dp)
-            .selectable(selected = state.continuous, enabled = state.ready, role = Role.RadioButton,
-                interactionSource = remember { MutableInteractionSource() }, indication = null,
-                onClick = { forever(true) })
-            .semantics { contentDescription = "Repeat forever" }, contentAlignment = Alignment.Center) {
-            Text("∞", fontFamily = FontFamily.Serif, fontSize = 25.sp,
-                color = if (state.continuous) Ink else FadedInk)
-            SelectionStroke(state.continuous, Modifier.align(Alignment.BottomCenter))
-        }
-    }
-}
-
-@Composable
-private fun SelectionStroke(selected: Boolean, modifier: Modifier) {
-    Canvas(modifier.padding(bottom = 5.dp).size(18.dp, 3.dp)) {
-        if (selected) drawLine(FadedInk.copy(alpha = .65f), Offset(0f, size.height * .55f),
-            Offset(size.width, size.height * .3f), 1.dp.toPx(), cap = StrokeCap.Round)
-    }
-}
-
-@Composable
-private fun RepetitionButton(symbol: String, label: String, enabled: Boolean, onClick: () -> Unit) {
-    Box(Modifier.size(48.dp).clip(CircleShape)
-        .clickable(enabled = enabled, role = Role.Button,
-            interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-        .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
-        Text(symbol, fontSize = 20.sp, fontWeight = FontWeight.Light,
-            color = FadedInk.copy(alpha = if (enabled) .85f else .3f))
+private fun RepetitionDisplay(state: TimerUiState) {
+    val active = state.phase != TimerPhase.Idle
+    Box(Modifier.height(48.dp), contentAlignment = Alignment.Center) {
+        Text(if (active) "${state.completedIntervals + 1} / ${if (state.continuous) "∞" else state.repeatCount}"
+            else if (state.continuous) "0 · ∞" else "${state.repeatCount}×",
+            fontFamily = FontFamily.Serif, fontSize = 18.sp, color = FadedInk,
+            modifier = Modifier.semantics {
+                contentDescription = if (active)
+                    "Interval ${state.completedIntervals + 1} of ${if (state.continuous) "unlimited" else state.repeatCount}"
+                else if (state.continuous) "Unlimited repetitions (0)" else "${state.repeatCount} repetitions"
+            })
     }
 }
 
@@ -309,7 +261,8 @@ private fun Saying(text: String, visible: Boolean) {
 }
 
 @Composable
-private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit, modifier: Modifier) {
+private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit,
+    adjustRepetitions: (Int) -> Unit, modifier: Modifier) {
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         EnsoArtwork(Modifier.fillMaxSize(), paused = state.phase == TimerPhase.Paused)
         val fontScale = LocalDensity.current.fontScale
@@ -328,51 +281,78 @@ private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit, modi
             }
         }
         if (state.ready && state.phase == TimerPhase.Idle) {
-            Row(Modifier.fillMaxSize().clip(CircleShape)) {
-                DurationZone(-1, state.selectedMs, adjustDuration, Modifier.weight(1f).fillMaxHeight())
-                DurationZone(1, state.selectedMs, adjustDuration, Modifier.weight(1f).fillMaxHeight())
-            }
+            CircleInput(state, adjustDuration, adjustRepetitions)
         }
+
     }
 }
 
+/** One recognizer owns the whole circle, including gestures crossing between halves. */
 @Composable
-private fun DurationZone(direction: Int, selectedMs: Long, adjust: (Int) -> Unit, modifier: Modifier) {
-    var pressed by remember { mutableStateOf(false) }
-    val currentAdjust by rememberUpdatedState(adjust)
-    Box(modifier.background(Ink.copy(alpha = if (pressed) .045f else 0f))
+private fun CircleInput(state: TimerUiState, duration: (Int) -> Unit, repetitions: (Int) -> Unit) {
+    val currentDuration by rememberUpdatedState(duration)
+    val currentRepetitions by rememberUpdatedState(repetitions)
+    Row(Modifier.fillMaxSize().clip(CircleShape)
         .semantics {
-            role = Role.Button
-            contentDescription = if (direction < 0) "Decrease meditation duration by 5 minutes"
-                else "Increase meditation duration by 5 minutes"
-            stateDescription = "${selectedMs / 60_000} minutes"
-            onClick { currentAdjust(direction); true }
+            contentDescription = "Timer circle"
+            stateDescription = "${state.selectedMs / 60_000} minutes"
+            customActions = listOf(
+                CustomAccessibilityAction("Increase meditation duration by ${state.settings.rotationStepMinutes} minutes") { currentDuration(1); true },
+                CustomAccessibilityAction("Decrease meditation duration by ${state.settings.rotationStepMinutes} minutes") { currentDuration(-1); true },
+            )
         }
-        .onKeyEvent {
-            if (it.type == KeyEventType.KeyUp && (it.key == Key.Enter || it.key == Key.Spacebar)) {
-                currentAdjust(direction); true
-            } else false
-        }.focusable()
-        .pointerInput(direction) {
-            coroutineScope {
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    down.consume()
-                    val hold = DurationHold(direction)
-                    pressed = true
-                    currentAdjust(hold.begin(SystemClock.elapsedRealtime()))
-                    val repeats = launch {
-                        while (true) {
-                            delay(16)
-                            val step = hold.repeat(SystemClock.elapsedRealtime())
-                            if (step != 0) currentAdjust(step)
-                        }
+        .pointerInput(Unit) {
+            awaitEachGesture {
+                val down = awaitFirstDown()
+                val center = Offset(size.width / 2f, size.height / 2f)
+                val radius = minOf(size.width, size.height) / 2f
+                if ((down.position - center).getDistance() > radius) return@awaitEachGesture
+                down.consume()
+                val rotation = CircleRotation()
+                fun angle(position: Offset): Double? {
+                    val relative = position - center
+                    // Angles close to the center are unstable. Re-entering the ring starts afresh.
+                    return if (hypot(relative.x, relative.y) < radius * .3f) null
+                        else atan2(relative.y.toDouble(), relative.x.toDouble())
+                }
+                rotation.move(angle(down.position))
+                var moved = false
+                var cancelled = false
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (event.changes.any { it.id != down.id && it.pressed } || change.isConsumed) {
+                        cancelled = true
                     }
-                    try { waitForUpOrCancellation()?.consume() }
-                    finally { hold.end(); repeats.cancel(); pressed = false }
+                    if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                    if (!cancelled && moved) {
+                        val steps = rotation.move(angle(change.position))
+                        repeat(kotlin.math.abs(steps)) { currentDuration(if (steps > 0) 1 else -1) }
+                    }
+                    change.consume()
+                    if (!change.pressed) {
+                        if (!cancelled && !moved &&
+                            change.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis) {
+                            currentRepetitions(if (down.position.x < center.x) -1 else 1)
+                        }
+                        break
+                    }
                 }
             }
-        })
+        }) {
+        for (direction in listOf(-1, 1)) {
+            Box(Modifier.weight(1f).fillMaxHeight().semantics {
+                role = Role.Button
+                contentDescription = if (direction > 0) "Increase repetitions" else "Decrease repetitions"
+                stateDescription = if (state.continuous) "Unlimited repetitions (0)" else "${state.repeatCount} repetitions"
+                onClick { currentRepetitions(direction); true }
+            }.onKeyEvent {
+                if (it.type == KeyEventType.KeyUp && (it.key == Key.Enter || it.key == Key.Spacebar)) {
+                    currentRepetitions(direction); true
+                } else false
+            }.focusable())
+        }
+    }
 }
 
 /** Bottom sheet of settings painted as a sheet of paper rather than a Material card. */
@@ -418,6 +398,21 @@ private fun SettingsPanel(
                 contentAlignment = Alignment.Center) {
                 Text("\u00D7", color = FadedInk.copy(alpha = .65f), fontSize = 24.sp)
             }
+        }
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Minutes per step", color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif,
+                modifier = Modifier.weight(1f).padding(end = 12.dp))
+            val index = ROTATION_STEP_OPTIONS.indexOf(settings.rotationStepMinutes).coerceAtLeast(0)
+            fun select(offset: Int) {
+                val next = (index + offset + ROTATION_STEP_OPTIONS.size) % ROTATION_STEP_OPTIONS.size
+                changeSettings { it.copy(rotationStepMinutes = ROTATION_STEP_OPTIONS[next]) }
+            }
+            PickerArrow("‹", "Smaller minute step") { select(-1) }
+            Text("${settings.rotationStepMinutes} min", fontFamily = FontFamily.Serif, color = Ink,
+                textAlign = TextAlign.Center, modifier = Modifier.width(56.dp).semantics {
+                    contentDescription = "${settings.rotationStepMinutes} minutes per rotation step"
+                })
+            PickerArrow("›", "Larger minute step") { select(1) }
         }
         Setting("Start Gong", settings.startGong,
             gong = settings.startGongSound,

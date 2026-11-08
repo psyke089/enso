@@ -2,6 +2,10 @@ package app.enso.meditation
 
 import android.view.WindowManager
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.geometry.Offset
+import kotlin.math.cos
+import kotlin.math.sin
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -35,9 +39,9 @@ class EnsoSmokeTest {
             awaitState { it.repeatCount == 3 }
             compose.onNodeWithContentDescription("Decrease repetitions").performClick()
             awaitState { it.repeatCount == 2 }
-            compose.onNodeWithContentDescription("Repeat forever").performClick()
+            repeat(2) { compose.onNodeWithContentDescription("Decrease repetitions").performClick() }
             awaitState { it.continuous && it.totalMs == null }
-            compose.onNodeWithContentDescription("Finite repetitions").performClick()
+            repeat(2) { compose.onNodeWithContentDescription("Increase repetitions").performClick() }
             awaitState { !it.continuous && it.totalMs == 2 * it.selectedMs }
             assertEquals(original.settings, state.settings)
             val saved = runBlocking { EnsoStore(compose.activity).load() }
@@ -46,7 +50,7 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription("Start").performClick()
             awaitState { it.phase == TimerPhase.Running }
             compose.onNodeWithContentDescription("Increase repetitions").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Repeat forever").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Timer circle").assertDoesNotExist()
             compose.onNodeWithContentDescription("Interval 1 of 2").assertIsDisplayed()
             compose.onNodeWithContentDescription("Pause").performClick()
             awaitState { it.phase == TimerPhase.Paused }
@@ -81,18 +85,28 @@ class EnsoSmokeTest {
         assertEquals(TimerPhase.Idle, state.phase)
         val original = state
         try {
-            controller.changeSettings { it.copy(showSaying = true) }
-            awaitState { it.settings.showSaying && it.saying.isNotEmpty() }
-            compose.onNodeWithText(state.saying).assertIsDisplayed()
+            controller.changeSettings { it.copy(showSaying = true, rotationStepMinutes = 5) }
+            awaitState { it.settings.showSaying && it.settings.rotationStepMinutes == 5 && it.saying.isNotEmpty() }
+            compose.waitUntil(5_000) {
+                runCatching { compose.onNodeWithText(state.saying).assertIsDisplayed() }.isSuccess
+            }
             val direction = if (state.selectedMs == MAX_DURATION) -1 else 1
             val forward = if (direction > 0) "Increase" else "Decrease"
             val backward = if (direction > 0) "Decrease" else "Increase"
-            compose.onNodeWithContentDescription("$forward meditation duration by 5 minutes").performClick()
+            adjustDurationAccessibly(forward)
             awaitState { it.selectedMs == original.selectedMs + direction * DURATION_STEP }
-            compose.onNodeWithContentDescription("$backward meditation duration by 5 minutes").performClick()
+            adjustDurationAccessibly(backward)
             awaitState { it.selectedMs == original.selectedMs }
 
             compose.onNodeWithContentDescription("Settings").performClick()
+            compose.onNodeWithText("Minutes per step").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Smaller minute step").performClick()
+            awaitState { it.settings.rotationStepMinutes == 2 }
+            assertEquals(2, runBlocking { EnsoStore(compose.activity).load() }.settings.rotationStepMinutes)
+            compose.activityRule.scenario.recreate()
+            compose.onNodeWithContentDescription("2 minutes per rotation step").assertIsDisplayed()
+            compose.onNodeWithContentDescription("Larger minute step").performClick()
+            awaitState { it.settings.rotationStepMinutes == 5 }
             compose.onNodeWithText("Vibration").assertIsDisplayed()
             compose.onNodeWithContentDescription("Close settings").assertIsDisplayed()
             // Tap the label itself; the merged row's center overlaps the sound-preview control.
@@ -115,7 +129,7 @@ class EnsoSmokeTest {
             assertNotEquals(original.saying, state.saying)
             val runningSaying = state.saying
             val running = state.remainingMs
-            compose.onNodeWithContentDescription("Increase meditation duration by 5 minutes").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Timer circle").assertDoesNotExist()
             compose.activityRule.scenario.recreate()
             awaitState { it.phase == TimerPhase.Running && it.remainingMs < running }
             assertEquals(original.selectedMs, state.selectedMs)
@@ -126,7 +140,7 @@ class EnsoSmokeTest {
             assertEquals(runningSaying, state.saying)
             val paused = state.remainingMs
             compose.onNodeWithText("Paused").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Decrease meditation duration by 5 minutes").assertDoesNotExist()
+            compose.onNodeWithContentDescription("Timer circle").assertDoesNotExist()
             compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
             Thread.sleep(1_100)
             assertEquals(paused, state.remainingMs)
@@ -156,32 +170,77 @@ class EnsoSmokeTest {
         }
     }
 
-    @Test fun realHoldRepeatsAndStopsOnRelease() {
+    private fun adjustDurationAccessibly(direction: String) {
+        val actions = compose.onNodeWithContentDescription("Timer circle").fetchSemanticsNode().config[SemanticsActions.CustomActions]
+        compose.runOnIdle {
+            assertTrue(actions.first { it.label == "$direction meditation duration by 5 minutes" }.action())
+        }
+    }
+
+    @Test fun circleDistinguishesRotationTapAndHold() {
         awaitState { it.ready }
-        val original = state.selectedMs
-        val direction = if (original > MAX_DURATION / 2) -1 else 1
-        val label = if (direction > 0) "Increase" else "Decrease"
+        val original = state
+        val direction = if (original.selectedMs > MAX_DURATION / 2) -1 else 1
         try {
-            compose.onNodeWithContentDescription("$label meditation duration by 5 minutes")
-                .performTouchInput { down(center) }
-            // The gesture coroutine uses Compose's test scheduler; the hold policy uses real monotonic time.
-            repeat(70) {
-                Thread.sleep(16)
-                compose.mainClock.advanceTimeBy(16)
+            controller.changeSettings { it.copy(rotationStepMinutes = 5) }
+            awaitState { it.settings.rotationStepMinutes == 5 }
+            val circle = compose.onNodeWithContentDescription("Timer circle")
+            circle.performTouchInput {
+                val radius = width * .4f
+                fun point(degrees: Float): Offset {
+                    val angle = Math.toRadians(degrees.toDouble())
+                    return center + Offset(cos(angle).toFloat() * radius, sin(angle).toFloat() * radius)
+                }
+                val start = if (direction > 0) -120f else -60f
+                down(point(start))
+                for (step in 1..13) moveTo(point(start + step * 5f * direction), 25)
+                up()
             }
-            compose.onNodeWithContentDescription("$label meditation duration by 5 minutes")
-                .performTouchInput { up() }
-            awaitState { kotlin.math.abs(it.selectedMs - original) >= 3 * DURATION_STEP }
-            val released = state.selectedMs
-            assertEquals(0L, (released - original) % DURATION_STEP)
-            Thread.sleep(550)
-            assertEquals(released, state.selectedMs)
+            awaitState { it.selectedMs == original.selectedMs + direction * 4 * DURATION_STEP }
+            assertEquals(original.repeatCount, state.repeatCount)
+            assertEquals(original.continuous, state.continuous)
+            val rotated = state.selectedMs
+            circle.performTouchInput { down(centerLeft + Offset(width * .2f, 0f)); advanceEventTime(800); up() }
+            compose.waitForIdle()
+            assertEquals(rotated, state.selectedMs)
+            assertEquals(original.repeatCount, state.repeatCount)
+            circle.performTouchInput { click(centerRight - Offset(width * .2f, 0f)) }
+            awaitState { !it.continuous && it.repeatCount ==
+                (if (original.continuous) 1 else (original.repeatCount + 1).coerceAtMost(MAX_REPETITIONS)) }
+            assertEquals(rotated, state.selectedMs)
+            circle.performTouchInput { click(centerLeft + Offset(width * .2f, 0f)) }
+            awaitState { if (original.continuous) it.continuous else it.repeatCount ==
+                (if (original.repeatCount == MAX_REPETITIONS) MAX_REPETITIONS - 1 else original.repeatCount) }
+            circle.performTouchInput {
+                val radius = width * .4f
+                fun point(degrees: Float): Offset {
+                    val angle = Math.toRadians(degrees.toDouble())
+                    return center + Offset(cos(angle).toFloat() * radius, sin(angle).toFloat() * radius)
+                }
+                val start = if (direction > 0) -60f else -120f
+                down(point(start))
+                for (step in 1..13) moveTo(point(start - step * 5f * direction), 25)
+                up()
+            }
+            awaitState { it.selectedMs == rotated - direction * 4 * DURATION_STEP }
         } finally {
-            while (state.selectedMs != original) {
+            controller.changeSettings { it.copy(rotationStepMinutes = 1) }
+            awaitState { it.settings.rotationStepMinutes == 1 }
+            while (state.selectedMs != original.selectedMs) {
                 val before = state.selectedMs
-                controller.adjustDuration(if (before > original) -1 else 1)
+                controller.adjustDuration(if (before > original.selectedMs) -1 else 1)
                 awaitState { it.selectedMs != before }
             }
+            controller.setRepeatForever(false)
+            awaitState { !it.continuous }
+            while (state.repeatCount != original.repeatCount) {
+                val before = state.repeatCount
+                controller.adjustRepetitions(if (before > original.repeatCount) -1 else 1)
+                awaitState { it.repeatCount != before }
+            }
+            controller.setRepeatForever(original.continuous)
+            controller.changeSettings { original.settings }
+            awaitState { it.continuous == original.continuous && it.settings == original.settings }
         }
     }
 }

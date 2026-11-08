@@ -279,97 +279,32 @@ The large Enso circle itself is the duration selector.
 
 # 11. Duration Selection
 
-Duration is adjusted directly by interacting with the Enso circle.
-
-Duration adjustment is available only when no meditation session is active.
-
-The Enso conceptually contains two large invisible interaction zones.
-
-Left half:
-
-- tap decreases duration by exactly 5 minutes
-
-Right half:
-
-- tap increases duration by exactly 5 minutes
-
-Example:
-
-`5 → 10 → 15 → 20 → 25 → 30 → ...`
-
-Minimum duration:
-
-`5 minutes`
-
-Maximum duration:
-
-`24 hours`
-
-Interaction zones should be large and forgiving.
-
-The user should not need to precisely hit a small icon.
+While Idle, trace the Enso clockwise to increase duration and counterclockwise to decrease it.
+Each 15° of rotation changes the duration by the configured minute step.
+Settings offers 1, 2, 5, 10 and 15 minutes per step; default: 5. Persist this preference locally.
+Duration remains bounded from 5 minutes to 24 hours, with whole-minute precision.
+Changing the step does not round or otherwise change the selected duration or active session.
 
 ---
 
-# 12. Duration Visual Hints
+# 12. Interaction Hints
 
-Duration adjustment must remain discoverable without destroying the minimal appearance.
-
-Very subtle hints are acceptable while no session is running.
-
-Examples:
-
-- faint `−` on the left
-- faint `+` on the right
-- tiny brush marks
-- understated chevrons
-- subtle opacity changes when touching either side
-
-These hints must remain secondary to the Enso and timer.
-
-Avoid obvious large plus/minus buttons outside the circle.
-
-The screen should remain calm when the user is not interacting.
+Keep the circle free of instructional text.
+Display the selected repetition count below the circle; display `0 · ∞` for unlimited.
+Keep hints subordinate to the painted Enso and timer.
 
 ---
 
-# 13. Press and Hold Duration Adjustment
+# 13. Rotation and Tap Recognition
 
-Holding either side of the Enso repeatedly adjusts the duration.
-
-Hold left:
-
-- continuously decrease by 5-minute steps
-
-Hold right:
-
-- continuously increase by 5-minute steps
-
-Expected behavior:
-
-- a normal tap performs exactly one 5-minute adjustment
-- holding initially repeats relatively slowly
-- continuing to hold gradually increases repetition speed
-- releasing immediately stops adjustment
-
-Acceleration should change the frequency of adjustments.
-
-Each individual adjustment must still be exactly 5 minutes.
-
-Do not suddenly start changing by 30-minute or 60-minute jumps.
-
-The interaction should feel smooth and predictable.
-
-Respect:
-
-- minimum 5 minutes
-- maximum 24 hours
-
-Never allow:
-
-- negative durations
-- overflow
-- unreasonable duration values
+Use a single gesture recognizer across both circle halves. A tap changes repetitions
+only on release, within touch slop and before the long-press timeout.
+Movement beyond touch slop permanently suppresses the tap for that gesture.
+Clockwise rotation increases duration; counterclockwise rotation decreases it.
+Accumulate partial angular steps, unwrap the angle seam, and allow multiple turns and reversal.
+Ignore unstable angles near the center and restart angle tracking when returning to the outer area.
+Holding without moving does nothing. Cancel adjustments on multi-touch or gesture cancellation.
+Release stops adjustment immediately. Never change repetitions as a side effect of rotation.
 
 ---
 
@@ -594,13 +529,11 @@ Critical timing logic must not live directly inside Composable functions.
 
 # 24. Session Repetitions
 
-Choose repetitions directly below the Enso and above Start:
-
-- a finite count from 1 to 99, adjusted with minus / plus
-- infinity for an unlimited session
-
-The finite count is remembered when switching to infinity and back.
-Default: one countdown. Selection persists locally and is locked while running or paused.
+Tap the left half of the Enso to subtract one repetition; tap the right half to add one.
+Finite counts range from 1 to 99. Decreasing 1 reaches 0, meaning unlimited repetitions.
+From 0, right goes to 1 and left stays at 0. Default: one countdown.
+Selection persists locally and is locked while running or paused.
+The stored finite count stays valid (1–99); unlimited mode uses the existing persisted boolean.
 
 Show a discreet total duration below the selector. During a session, show the current
 interval number and elapsed / total time. Unlimited sessions show elapsed time / infinity.
@@ -1135,17 +1068,10 @@ Minimalism must not reduce usability.
 
 Provide comfortable touch targets.
 
-Invisible left/right duration zones must expose meaningful accessibility semantics.
-
-Examples:
-
-Left zone:
-
-`Decrease meditation duration by 5 minutes`
-
-Right zone:
-
-`Increase meditation duration by 5 minutes`
+Expose the left and right halves as accessible actions labeled `Decrease repetitions`
+and `Increase repetitions`, with the current count or unlimited state.
+Expose duration increase/decrease as custom accessibility actions on the circle,
+including the configured minute step in their labels. Preserve keyboard activation for repetition taps.
 
 Interactive icons require appropriate content descriptions.
 
@@ -1308,19 +1234,13 @@ Do not spend excessive effort testing Compose rendering details.
 
 ---
 
-# 55. Duration Hold Behavior Tests
+# 55. Circle Gesture Tests
 
-The underlying duration-adjustment logic should be testable independently from gesture rendering where practical.
-
-Verify:
-
-- repeated increase uses 5-minute increments
-- repeated decrease uses 5-minute increments
-- lower limit is respected
-- upper limit is respected
-- adjustment stops when interaction ends
-
-Exact UI gesture timing does not require fragile instrumentation tests unless necessary.
+Test angular accumulation, direction reversal, wraparound, multiple turns and center re-entry
+independently of rendering. Verify configurable steps, bounds, restoration of whole-minute durations,
+and repetition transitions between 0 and finite counts.
+On device verify rotation changes duration without changing repetitions, taps change repetitions
+without changing duration, and holding without moving does nothing.
 
 ---
 
@@ -1489,9 +1409,9 @@ The first usable version of Enso is complete when:
 - the default Android template UI is gone
 - the Enso timer screen exists
 - the washi / sumi visual direction is clearly established
-- duration is adjustable through left/right Enso interaction
-- tap changes duration by exactly 5 minutes
-- hold repeatedly changes duration and accelerates
+- duration is adjustable through clockwise/counterclockwise Enso rotation
+- rotation minute steps are configurable and persist
+- left/right taps adjust repetitions, with 0 meaning unlimited
 - selected duration persists across app restarts
 - Start works
 - Pause works

@@ -337,12 +337,46 @@ class TimerEngineTest {
         assertFalse(restored.snapshot.session!!.continuous)
     }
 
+    @Test fun configuredMinuteStepsPersistWithoutRoundingBackToFive() {
+        for (step in ROTATION_STEP_OPTIONS) {
+            val engine = TimerEngine(TimerSnapshot(settings = EnsoSettings(rotationStepMinutes = step)))
+            engine.adjustDuration(1)
+            assertEquals(DEFAULT_DURATION + step * 60_000L, engine.snapshot.selectedMs)
+            val restored = TimerEngine(engine.snapshot)
+            assertEquals(engine.snapshot, restored.snapshot)
+            restored.start(0)
+            assertNotNull(TimerEngine(restored.snapshot, 1).snapshot.session)
+            restored.stop()
+            restored.adjustDuration(-1)
+            assertEquals(DEFAULT_DURATION, restored.snapshot.selectedMs)
+            restored.adjustDuration(-1)
+            assertTrue(restored.snapshot.selectedMs >= DURATION_STEP)
+        }
+        val invalid = TimerEngine(TimerSnapshot(settings = EnsoSettings(rotationStepMinutes = Int.MAX_VALUE)))
+        assertEquals(5, invalid.snapshot.settings.rotationStepMinutes)
+    }
+
+    @Test fun zeroMeansUnlimitedAndTapsLeaveItAtOne() {
+        val engine = TimerEngine()
+        engine.adjustRepetitions(-1)
+        assertTrue(engine.snapshot.repeatForever)
+        assertNull(engine.uiState(0).totalMs)
+        engine.adjustRepetitions(-1)
+        assertTrue(engine.snapshot.repeatForever)
+        engine.adjustRepetitions(1)
+        assertFalse(engine.snapshot.repeatForever)
+        assertEquals(1, engine.snapshot.repeatCount)
+        engine.adjustRepetitions(1)
+        assertEquals(2, engine.snapshot.repeatCount)
+    }
+
     @Test fun repetitionBoundsAndCorruptRestoredCountsAreSafe() {
         val engine = TimerEngine()
         repeat(200) { engine.adjustRepetitions(Int.MAX_VALUE) }
         assertEquals(MAX_REPETITIONS, engine.snapshot.repeatCount)
         repeat(200) { engine.adjustRepetitions(Int.MIN_VALUE) }
         assertEquals(1, engine.snapshot.repeatCount)
+        assertTrue(engine.snapshot.repeatForever)
         assertEquals(1, TimerEngine(TimerSnapshot(repeatCount = Int.MIN_VALUE)).snapshot.repeatCount)
         val maximum = TimerEngine(TimerSnapshot(selectedMs = MAX_DURATION, repeatCount = Int.MAX_VALUE))
         assertEquals(MAX_DURATION * MAX_REPETITIONS, maximum.uiState(0).totalMs)
