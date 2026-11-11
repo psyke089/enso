@@ -69,3 +69,11 @@ fibers replace the original cool flat fill, matching the other painter controls.
 target and 38dp displayed image size remain consistent with the other buttons.
 The native splash already fills the Android-safe 192dp motif circle in a 288dp transparent icon
 canvas (equivalently 288px of ink on the 432px source PNG); keep that maximum uncropped size.
+
+## Quiet transitions and shared brush (2026-11-12)
+
+The brush settings button now combines the code-native main-view `BrushMark` silhouette with
+`ink_settings.png`, superseding the textured vector above. The drawn-today variant combines that
+same brush with a miniature `enso_brush.png`; no new generated assets are needed.
+The native splash now hands off to a Compose layer that moves and crossfades into the timer
+artwork before controls appear, superseding the earlier native-only transition description.

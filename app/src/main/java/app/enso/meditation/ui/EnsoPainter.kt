@@ -2,6 +2,9 @@ package app.enso.meditation.ui
 
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -161,10 +164,25 @@ internal const val ENSO_GUIDE_RADIUS = .38f
 
 /** A small brush silhouette drawn in the same editable canvas language as the experiment. */
 @Composable
-internal fun InkPaintButton(onClick: () -> Unit) {
-    Canvas(Modifier.size(44.dp).clip(CircleShape)
+internal fun InkPaintButton(drawnToday: Boolean = false, onClick: () -> Unit) {
+    Box(Modifier.size(44.dp).clip(CircleShape)
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-            onClick = onClick).semantics { contentDescription = "Paint an Enso" }.padding(10.dp)) {
+            onClick = onClick).semantics {
+                contentDescription = "Paint an Enso"
+                if (drawnToday) stateDescription = "Enso drawn today"
+                role = Role.Button
+            }, contentAlignment = Alignment.Center) {
+        if (drawnToday) Image(painterResource(R.drawable.enso_brush), null,
+            Modifier.size(29.dp).align(Alignment.TopStart).padding(3.dp).rotate(154f), alpha = .7f)
+        BrushMark(if (drawnToday) Modifier.size(23.dp).align(Alignment.BottomEnd).padding(2.dp)
+            else Modifier.size(24.dp))
+    }
+}
+
+/** Shared brush silhouette for the main action and its settings control. */
+@Composable
+internal fun BrushMark(modifier: Modifier = Modifier) {
+    Canvas(modifier) {
         val w = size.width
         val h = size.height
         drawPath(Path().apply {

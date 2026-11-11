@@ -12,6 +12,25 @@ internal class EnsoImageStore(context: Context) {
 
     private val preferences = context.applicationContext.getSharedPreferences("enso_artwork", Context.MODE_PRIVATE)
 
+    fun wasDrawnToday(now: Long = System.currentTimeMillis()): Boolean =
+        sameLocalDay(preferences.getLong("last_drawn_at", file.baseFile.lastModified()), now)
+
+    fun shouldPromptToday(now: Long = System.currentTimeMillis()): Boolean =
+        !wasDrawnToday(now) && !sameLocalDay(preferences.getLong("last_dismissed_at", 0L), now)
+
+    fun dismissForToday() {
+        preferences.edit().putLong("last_dismissed_at", System.currentTimeMillis()).apply()
+    }
+
+    private fun sameLocalDay(timestamp: Long, now: Long): Boolean {
+        if (timestamp == 0L) return false
+        val today = java.util.Calendar.getInstance().apply { timeInMillis = now }
+        val other = java.util.Calendar.getInstance().apply { timeInMillis = timestamp }
+        return today.get(java.util.Calendar.ERA) == other.get(java.util.Calendar.ERA) &&
+            today.get(java.util.Calendar.YEAR) == other.get(java.util.Calendar.YEAR) &&
+            today.get(java.util.Calendar.DAY_OF_YEAR) == other.get(java.util.Calendar.DAY_OF_YEAR)
+    }
+
     fun frameScale(): Float = preferences.getFloat("frame_scale", 1f).let {
         if (it.isFinite()) it.coerceIn(1f, 16f) else 1f
     }
@@ -25,7 +44,8 @@ internal class EnsoImageStore(context: Context) {
         try {
             check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream))
             file.finishWrite(stream)
-            preferences.edit().putFloat("frame_scale", frameScale.coerceIn(1f, 16f)).apply()
+            preferences.edit().putFloat("frame_scale", frameScale.coerceIn(1f, 16f))
+                .putLong("last_drawn_at", System.currentTimeMillis()).apply()
         } catch (failure: Exception) {
             file.failWrite(stream)
             throw failure

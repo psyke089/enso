@@ -16,6 +16,8 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Before
+import org.junit.After
 import org.junit.runner.RunWith
 
 /** Exercises real controls and persistence without shortening production timer limits. */
@@ -25,6 +27,58 @@ class EnsoSmokeTest {
     private val controller get() = (compose.activity.application as EnsoApplication).controller
     private val state get() = controller.state.value
     private fun awaitState(test: (TimerUiState) -> Boolean) = compose.waitUntil(5_000) { test(state) }
+
+    private var savedArtworkDates: Pair<Long?, Long?>? = null
+
+    @Before fun dismissDailyPromptForControlTests() {
+        val preferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
+        savedArtworkDates = (if (preferences.contains("last_drawn_at")) preferences.getLong("last_drawn_at", 0L) else null) to
+            (if (preferences.contains("last_dismissed_at")) preferences.getLong("last_dismissed_at", 0L) else null)
+        awaitState { it.ready }
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Close painting").fetchSemanticsNodes().isNotEmpty() ||
+                compose.onAllNodesWithContentDescription("Paint an Enso").fetchSemanticsNodes().isNotEmpty()
+        }
+        if (compose.onAllNodesWithContentDescription("Close painting").fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithContentDescription("Close painting").performClick()
+        }
+        compose.waitForIdle()
+    }
+
+    @After fun restoreArtworkDates() {
+        savedArtworkDates?.let { (drawn, dismissed) ->
+            val edit = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE).edit()
+            if (drawn == null) edit.remove("last_drawn_at") else edit.putLong("last_drawn_at", drawn)
+            if (dismissed == null) edit.remove("last_dismissed_at") else edit.putLong("last_dismissed_at", dismissed)
+            edit.commit()
+        }
+    }
+
+    @Test fun dailyDrawingPromptHonorsCloseAndReturnsTheNextDay() {
+        val preferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
+        val store = app.enso.meditation.ui.EnsoImageStore(compose.activity)
+        preferences.edit().putLong("last_drawn_at", 0L).putLong("last_dismissed_at", 0L).commit()
+        compose.activityRule.scenario.recreate()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Close painting").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Close painting").performClick()
+        compose.waitForIdle()
+        assertFalse(store.shouldPromptToday())
+        assertFalse(store.wasDrawnToday())
+        compose.activityRule.scenario.recreate()
+        compose.onNodeWithContentDescription("Paint an Enso").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Close painting").assertDoesNotExist()
+        val tomorrow = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, 1) }
+        assertTrue(store.shouldPromptToday(tomorrow.timeInMillis))
+        val yesterday = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -1) }
+        preferences.edit().putLong("last_dismissed_at", yesterday.timeInMillis).commit()
+        compose.activityRule.scenario.recreate()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Close painting").fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithContentDescription("Close painting").performClick()
+    }
 
     @Test fun repetitionSelectionAndSessionPersistWithoutChangingGongSettings() {
         awaitState { it.ready }
@@ -414,9 +468,14 @@ class EnsoSmokeTest {
         val imageStore = app.enso.meditation.ui.EnsoImageStore(compose.activity)
         val originalImage = imageStore.load()
         val originalScale = imageStore.frameScale()
+        val artworkPreferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
+        val originalDrawnAt = artworkPreferences.getLong("last_drawn_at", 0L)
         val original = state
         try {
-            val bounds = compose.onNodeWithContentDescription("Timer circle").fetchSemanticsNode().boundsInRoot
+            compose.waitUntil(5_000) {
+                compose.onAllNodesWithTag("Timer artwork frame").fetchSemanticsNodes().isNotEmpty()
+            }
+            val bounds = compose.onNodeWithTag("Timer artwork frame").fetchSemanticsNode().boundsInRoot
             compose.onNodeWithContentDescription("Paint an Enso").performClick()
             val canvas = compose.onNodeWithContentDescription("Enso painting canvas")
             val paintBounds = canvas.fetchSemanticsNode().boundsInRoot
@@ -437,6 +496,11 @@ class EnsoSmokeTest {
             }
             compose.onNodeWithContentDescription("Save and use painted Enso").performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty() }
+            assertTrue(imageStore.wasDrawnToday())
+            val tomorrow = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, 1) }
+            assertFalse(imageStore.wasDrawnToday(tomorrow.timeInMillis))
+            compose.onNodeWithContentDescription("Paint an Enso").assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Enso drawn today"))
             val first = imageStore.load()!!
             assertEquals(paintBounds.width.toInt(), first.width)
             assertEquals(first.width, first.height)
@@ -459,12 +523,14 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription("Use standard Enso").performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("Standard Enso artwork").fetchSemanticsNodes().isNotEmpty() }
             assertNull(imageStore.load())
+            assertFalse(imageStore.shouldPromptToday())
             assertEquals(original.selectedMs, state.selectedMs)
             assertEquals(original.settings, state.settings)
             assertEquals(original.repeatCount, state.repeatCount)
             assertEquals(original.continuous, state.continuous)
         } finally {
             if (originalImage != null) imageStore.save(originalImage, originalScale) else imageStore.useStandard()
+            artworkPreferences.edit().putLong("last_drawn_at", originalDrawnAt).commit()
         }
     }
 

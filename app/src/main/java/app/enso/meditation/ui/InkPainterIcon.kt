@@ -1,14 +1,11 @@
 package app.enso.meditation.ui
 
-import android.content.Context
-import android.graphics.Bitmap
-import androidx.core.content.ContextCompat
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.res.painterResource
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -16,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -30,9 +28,8 @@ internal enum class PainterSymbol { Close, Brush, Apply, Trash }
 @Composable
 internal fun InkPainterIcon(symbol: PainterSymbol, label: String, enabled: Boolean = true,
     onClick: () -> Unit) {
-    val context = LocalContext.current
     val image = remember(symbol) {
-        if (symbol == PainterSymbol.Brush) return@remember texturedBrushSettings(context).asImageBitmap()
+        if (symbol == PainterSymbol.Brush) return@remember null
         val strokes = mutableListOf<SumiStroke>()
         fun line(width: Float, points: List<Offset>) {
             val stroke = SumiStroke(1f, 1000f, strokes.size + 31,
@@ -74,30 +71,15 @@ internal fun InkPainterIcon(symbol: PainterSymbol, label: String, enabled: Boole
         .clickable(enabled = enabled, role = Role.Button,
             interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
         .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
-        Image(image, contentDescription = null, alpha = if (enabled) .88f else .25f,
-            modifier = Modifier.size(38.dp))
+        if (symbol == PainterSymbol.Brush) {
+            Box(Modifier.size(38.dp).graphicsLayer { alpha = if (enabled) .88f else .25f }) {
+                BrushMark(Modifier.size(27.dp).align(Alignment.TopStart))
+                Image(painterResource(R.drawable.ink_settings), contentDescription = null,
+                    modifier = Modifier.size(24.dp).align(Alignment.BottomEnd))
+            }
+        } else image?.let {
+            Image(it, contentDescription = null, alpha = if (enabled) .88f else .25f,
+                modifier = Modifier.size(38.dp))
+        }
     }
-}
-
-/** Keep the supplied vector silhouette, but deposit it in the same warm, mottled ink. */
-private fun texturedBrushSettings(context: Context): Bitmap {
-    val side = 256
-    val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
-    val drawable = checkNotNull(ContextCompat.getDrawable(context, R.drawable.ink_brush_settings)).mutate()
-    drawable.setBounds(0, 0, side, side)
-    drawable.draw(android.graphics.Canvas(bitmap))
-    val pixels = IntArray(side * side)
-    bitmap.getPixels(pixels, 0, side, 0, 0, side, side)
-    for (y in 0 until side) for (x in 0 until side) {
-        val index = y * side + x
-        val alpha = pixels[index] ushr 24
-        if (alpha == 0) continue
-        val wash = sumiGrain(x / 21f, y / 29f, 17)
-        val fibers = sumiGrain((x + y * .27f) / 2.1f, y / 13f, 51)
-        val pores = sumiGrain(x / 1.15f, y / 1.15f, 81)
-        val coverage = (.68f + wash * .2f + fibers * .12f) * (.82f + pores * .18f)
-        pixels[index] = ((alpha * coverage).roundToInt().coerceIn(0, 255) shl 24) or 0x00292823
-    }
-    bitmap.setPixels(pixels, 0, side, 0, 0, side, side)
-    return bitmap
 }

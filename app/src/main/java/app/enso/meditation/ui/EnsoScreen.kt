@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -46,6 +47,10 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.testTag
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
@@ -66,6 +71,8 @@ import app.enso.meditation.*
 import app.enso.meditation.BuildConfig
 import app.enso.meditation.R
 import app.enso.meditation.ui.theme.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -80,6 +87,8 @@ fun EnsoScreen(
     adjustRepetitions: (Int) -> Unit,
     changeSettings: ((EnsoSettings) -> EnsoSettings) -> Unit,
     previewGong: (GongChoice) -> Unit,
+    animateLaunch: Boolean = false,
+    splashReleased: Boolean = true,
     action: (SessionAction) -> Unit,
 ) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -92,7 +101,27 @@ fun EnsoScreen(
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     val scope = rememberCoroutineScope()
     val painterOpacity = remember { Animatable(1f) }
-    val mainOpacity = remember { Animatable(1f) }
+    val launchInkOpacity = remember { Animatable(1f) }
+    var foregroundVisit by remember { mutableIntStateOf(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) foregroundVisit++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+    var launchComplete by rememberSaveable { mutableStateOf(!animateLaunch) }
+    val launchMotion = remember { Animatable(if (launchComplete) 1f else 0f) }
+    val mainOpacity = remember { Animatable(if (launchComplete) 1f else 0f) }
+    var artworkLoaded by remember { mutableStateOf(false) }
+    var drawnToday by remember { mutableStateOf(imageStore.wasDrawnToday()) }
+    LaunchedEffect(imageStore) {
+        while (true) {
+            drawnToday = imageStore.wasDrawnToday()
+            delay(30_000)
+        }
+    }
     var handingOff by remember { mutableStateOf(false) }
     var painterClosing by remember { mutableStateOf(false) }
     var handoffImage by remember { mutableStateOf<ImageBitmap?>(null) }
@@ -101,12 +130,39 @@ fun EnsoScreen(
         val saved = withContext(Dispatchers.IO) { imageStore.load()?.asImageBitmap() to imageStore.frameScale() }
         customEnso = saved.first
         customFrameScale = saved.second
+        artworkLoaded = true
+    }
+    LaunchedEffect(foregroundVisit, launchComplete, state.ready, circleBounds != null) {
+        if (launchComplete && state.ready && circleBounds != null) {
+            drawnToday = imageStore.wasDrawnToday()
+            if (!paintingOpen && imageStore.shouldPromptToday()) {
+                painterOpacity.snapTo(0f)
+                paintingOpen = true
+                painterOpacity.animateTo(1f, tween(450))
+            }
+        }
+    }
+    LaunchedEffect(splashReleased, artworkLoaded, circleBounds != null, state.ready) {
+        if (!launchComplete && splashReleased && artworkLoaded && circleBounds != null && state.ready) {
+            launchMotion.animateTo(1f, tween(850, easing = FastOutSlowInEasing))
+            if (imageStore.shouldPromptToday()) {
+                painterOpacity.snapTo(0f)
+                paintingOpen = true
+                coroutineScope {
+                    launch { painterOpacity.animateTo(1f, tween(450)) }
+                    launch { launchInkOpacity.animateTo(0f, tween(450)) }
+                }
+                mainOpacity.snapTo(1f)
+            } else mainOpacity.animateTo(1f, tween(450))
+            launchComplete = true
+        }
     }
     fun closePainter() {
         if (painterClosing) return
         painterClosing = true
+        imageStore.dismissForToday()
         scope.launch {
-            painterOpacity.animateTo(0f, tween(160))
+            painterOpacity.animateTo(0f, tween(360))
             paintingOpen = false
             painterOpacity.snapTo(1f)
             painterClosing = false
@@ -115,7 +171,7 @@ fun EnsoScreen(
     Box(Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {
         WashiBackground(Modifier.matchParentSize())
         Box(Modifier.fillMaxSize().graphicsLayer { alpha = mainOpacity.value }
-            .then(if (paintingOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
+            .then(if (paintingOpen || !launchComplete) Modifier.clearAndSetSemantics {} else Modifier)) {
             WashiBackground(Modifier.matchParentSize())
             SumiLandscape(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -128,13 +184,19 @@ fun EnsoScreen(
                     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically) {
-                        InkPaintButton { if (circleBounds != null) paintingOpen = true }
+                        InkPaintButton(drawnToday) {
+                            if (circleBounds != null && launchComplete) scope.launch {
+                                painterOpacity.snapTo(0f)
+                                paintingOpen = true
+                                painterOpacity.animateTo(1f, tween(360))
+                            }
+                        }
                         Spacer(Modifier.width(8.dp))
                         InkSettingsButton { settingsOpen = true }
                     }
                     Spacer(Modifier.height(topSpace))
-                    TimerCircle(state, adjustDuration, adjustRepetitions, customEnso, customFrameScale, !handingOff,
-                        Modifier.size(circleSize).onGloballyPositioned { circleBounds = Rect(it.positionInRoot(), it.size.toSize()) })
+                    TimerCircle(state, adjustDuration, adjustRepetitions, customEnso, customFrameScale, !handingOff && launchComplete,
+                        Modifier.size(circleSize).testTag("Timer artwork frame").onGloballyPositioned { circleBounds = Rect(it.positionInRoot(), it.size.toSize()) })
                     RepetitionDisplay(state)
                     Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
                     InkAction(
@@ -160,8 +222,8 @@ fun EnsoScreen(
             }
             AnimatedVisibility(
                 visible = settingsOpen,
-                enter = fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 4 },
-                exit = fadeOut(tween(180)) + slideOutVertically(tween(200)) { it / 4 },
+                enter = fadeIn(tween(360)) + slideInVertically(tween(420)) { it / 20 },
+                exit = fadeOut(tween(300)) + slideOutVertically(tween(360)) { it / 20 },
             ) {
                 BackHandler { settingsOpen = false }
                 Box(Modifier.fillMaxSize()) {
@@ -183,9 +245,11 @@ fun EnsoScreen(
             val paintBounds = Rect(bounds.center.x - side / 2, bounds.center.y - side / 2,
                 bounds.center.x + side / 2, bounds.center.y + side / 2)
             EnsoPainter(paintBounds, bounds, Modifier.graphicsLayer { alpha = painterOpacity.value },
-                handingOff, painterClosing, onSave = { bitmap ->
+                handingOff, painterClosing || !launchComplete, onSave = { bitmap ->
                 val scale = side / bounds.width
                 withContext(Dispatchers.IO) { imageStore.save(bitmap, scale) }
+                mainOpacity.snapTo(0f)
+                drawnToday = imageStore.wasDrawnToday()
                 customEnso = bitmap.asImageBitmap()
                 customFrameScale = scale
                 handoffBounds = paintBounds
@@ -193,10 +257,10 @@ fun EnsoScreen(
                 handingOff = true
                 // The root owns this animation so it continues after the painter is removed.
                 scope.launch {
-                    mainOpacity.snapTo(0f)
-                    withFrameNanos { }
-                    painterOpacity.animateTo(0f, tween(180))
-                    mainOpacity.animateTo(1f, tween(260))
+                    coroutineScope {
+                        launch { painterOpacity.animateTo(0f, tween(520)) }
+                        launch { mainOpacity.animateTo(1f, tween(600, delayMillis = 80)) }
+                    }
                     // Defer disposal until both animations have finished.
                     paintingOpen = false
                     handingOff = false
@@ -209,6 +273,37 @@ fun EnsoScreen(
                 customFrameScale = 1f
                 closePainter()
             }, onClose = { closePainter() })
+        }
+        if (!launchComplete) Box(Modifier.fillMaxSize().pointerInput(Unit) {
+            awaitEachGesture {
+                awaitFirstDown().consume()
+                do {
+                    val event = awaitPointerEvent()
+                    event.changes.forEach { it.consume() }
+                } while (event.changes.any { it.pressed })
+            }
+        })
+        if (!launchComplete) circleBounds?.let { bounds ->
+            val density = LocalDensity.current
+            val initialSide = with(density) { 288.dp.toPx() }
+            val finalSide = bounds.width * if (customEnso != null) customFrameScale else 1f
+            // Transform a cached layer; do not relayout the screen on every animation frame.
+            Box(Modifier.size(with(density) { finalSide.toDp() })
+                .graphicsLayer {
+                    alpha = launchInkOpacity.value
+                    val progress = launchMotion.value
+                    val side = initialSide + (finalSide - initialSide) * progress
+                    scaleX = side / finalSide
+                    scaleY = scaleX
+                    translationX = viewSize.width / 2f + (bounds.center.x - viewSize.width / 2f) * progress - finalSide / 2f
+                    translationY = viewSize.height / 2f + (bounds.center.y - viewSize.height / 2f) * progress - finalSide / 2f
+                }) {
+                Image(painterResource(R.drawable.native_splash_enso), null,
+                    Modifier.fillMaxSize().graphicsLayer { alpha = 1f - launchMotion.value })
+                Box(Modifier.fillMaxSize().graphicsLayer { alpha = launchMotion.value }) {
+                    EnsoArtwork(Modifier.fillMaxSize(), paused = state.phase == TimerPhase.Paused, customImage = customEnso)
+                }
+            }
         }
         // One image bridges both screens while their controls fade around it.
         handoffImage?.let { image -> handoffBounds?.let { bounds ->

@@ -23,12 +23,19 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val controller get() = (application as EnsoApplication).controller
+    private var splashReleased by mutableStateOf(Build.VERSION.SDK_INT < 31)
     private var notificationRequested = false
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         setTheme(R.style.Theme_Enso)
         super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= 31) {
+            splashScreen.setOnExitAnimationListener { splash ->
+                splash.remove()
+                splashReleased = true
+            }
+        }
         notificationRequested = savedInstanceState?.getBoolean("notification_requested") ?: false
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, Paper.toArgb()),
@@ -53,7 +60,8 @@ class MainActivity : ComponentActivity() {
             EnsoTheme {
                 EnsoScreen(state, controller::adjustDuration, controller::adjustRepetitions,
                     controller::changeSettings,
-                    controller::previewGong) { action ->
+                    controller::previewGong, animateLaunch = savedInstanceState == null,
+                    splashReleased = splashReleased) { action ->
                     MeditationService.send(this, action)
                     if (action == SessionAction.Start) requestNotifications()
                 }

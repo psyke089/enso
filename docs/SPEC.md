@@ -1552,11 +1552,13 @@ removing the custom Enso/restoring the standard, and a checkmark for save/apply.
 use a stable full-screen view with all seven controls, two columns in landscape, no draggable sheet
 or scrolling. Close is an ink X; Defaults and Copy values remain text actions.
 
-Use only the native OS launch splash with the standard Enso at the largest safe icon size and no
-icon background. There is no in-app splash overlay and no artificial startup delay.
+Use the native OS launch splash with the standard Enso at the largest safe icon size and no
+icon background. On fresh activity launch, continue that mark into the timer position with an
+850 ms eased translation/scale and artwork crossfade, then reveal the controls over 450 ms.
+Do not replay on activity recreation. Respect the system animation duration scale.
 
 On save/apply, hold the rendered transparent ink image fixed at its canvas bounds while painter
-controls and guide fade out (180 ms), then the timer controls fade in (260 ms). The same image and
+controls and guide fade out (520 ms), while the timer controls fade in (600 ms, starting 80 ms later). The same image and
 frame scale bridge both screens without moving or resizing. Animate layer alpha without recomposing
 whole screens per frame, prepare the bitmap for drawing first, and dispose the painter after both fades. Close/discard and restore standard
 softly fade the painter away. These animations are transitions, not startup loading delays.
@@ -1570,3 +1572,14 @@ Pausing freezes the displayed remaining time. Stop or final
 completion removes the notification. Use a dedicated default-importance meditation timer channel,
 public lock-screen visibility, no notification sound or vibration, no badge or heads-up alert.
 Android notification permission and the user's system lock-screen notification preferences apply.
+
+The brush settings control reuses the main brush silhouette alongside the ink settings sliders.
+After saving a drawing, the main brush action includes a small painted Enso for the current local
+calendar day, with an accessible state description. This reminder persists across relaunches,
+refreshes while open, and records the act of drawing even if standard artwork is restored later.
+
+On the first foreground visit of each local day without a saved drawing or dismissal, open the
+drawing view automatically. Close/Back and restore-standard dismiss this invitation until the next
+local day; saving satisfies it. No additional skip control is shown. On launch the splash mark
+fades into the drawing canvas rather than briefly showing the timer controls first. Returning to
+the app on a new day checks again; crossing midnight while using the app does not interrupt it.
