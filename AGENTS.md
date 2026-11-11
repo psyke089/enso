@@ -12,12 +12,32 @@ Enso is a private, fully offline Android meditation timer and interval gong, bui
 
 ## Release status
 
-This is a private app that will likely never be published to a real app store. Debug-signed builds are fine and expected; there is no release signing configuration. `assembleDebug` is the normal build, and the debug APK at `app/build/outputs/apk/debug/app-debug.apk` is the deliverable.
+This is a private app that will likely never be published to a real app store. Builds are distributed as APK assets on [GitHub releases](https://github.com/psyke089/enso/releases), not through an app store.
+
+Release signing is configured locally, not in version control. `app/build.gradle.kts` loads the gitignored `keystore.properties` from the repo root when it exists:
+
+```properties
+storeFile=/home/psyke/.android/enso-release.jks
+storePassword=…
+keyAlias=enso
+keyPassword=…
+```
+
+Keep the keystore and `keystore.properties` out of the repository. Without that file `assembleRelease` still builds, but produces an unsigned APK; debug builds are unaffected either way.
+
+The shipped artifact is the release-signed `app/build/outputs/apk/release/enso-<versionName>.apk`. `app-debug.apk` is only for local installs and device testing, and it cannot replace an installed release-signed copy (signature mismatch) — uninstall first when switching.
+
+### Versioning and release flow
+
+- Bump `ensoVersionCode` (integer, +1 per release) and `ensoVersionName` (semver) at the top of `app/build.gradle.kts`, and update the release badge in `README.md`.
+- Tags are annotated `vX.Y.Z`; release titles are `Enso X.Y.Z`. Attach the release APK and write notes in the established format (highlights, version numbers, install instructions, known limits).
+- `origin` has two push URLs: GitHub (`psyke089/enso`) and Codeberg (`k4r/enso`); a plain `git push origin main --follow-tags` updates both.
 
 ## Build, test and run
 
 ```sh
 ./gradlew testDebugUnitTest lintDebug assembleDebug
+./gradlew assembleRelease   # signed enso-<versionName>.apk, see Release status
 ./gradlew assembleDebugAndroidTest
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
@@ -32,6 +52,8 @@ A physical Android phone is normally attached over USB debugging; check with `ad
 Use an emulator or simulator **only** if no physical device is available **and** the user has explicitly approved it — don't assume emulator use is allowed.
 
 Keep device interaction non-destructive and limited to Enso, following [SPEC.md](docs/SPEC.md) §59–61: don't factory-reset the phone, erase storage, touch unrelated apps or data, or run destructive adb commands. If the device is unavailable, continue with build and unit-test verification and report that device testing could not be completed.
+
+Instrumented tests need Enso in the foreground. If `EnsoSmokeTest` fails with `Activity never becomes requested state` or a `compose.waitUntil` timeout, check whether another app on the phone took focus mid-run (`adb logcat` → `Displayed app` / `Lifecycle status change`): the activity gets stopped and the Compose wait times out. That is device interference, not an app defect — rerun instead of force-stopping the other app.
 
 ## Scratch space and the sandbox
 
