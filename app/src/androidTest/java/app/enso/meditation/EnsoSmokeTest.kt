@@ -336,29 +336,6 @@ class EnsoSmokeTest {
         }
     }
 
-    @Test fun startupEnsoSharesTheTimerArtworkPositionAndSize() {
-        awaitState { it.ready }
-        val original = state
-        val bounds = compose.onNodeWithContentDescription("Timer circle").fetchSemanticsNode().boundsInRoot
-        try {
-            compose.runOnUiThread {
-                compose.activity.setContent {
-                    app.enso.meditation.ui.theme.EnsoTheme {
-                        app.enso.meditation.ui.EnsoScreen(original.copy(ready = false), {}, {}, {}, {}, {})
-                    }
-                }
-            }
-            val splash = compose.onNodeWithTag("Enso splash ring")
-            splash.assertIsDisplayed()
-            val splashBounds = splash.fetchSemanticsNode().boundsInRoot
-            assertEquals(bounds.left, splashBounds.left, 1f)
-            assertEquals(bounds.top, splashBounds.top, 1f)
-            assertEquals(bounds.width, splashBounds.width, 1f)
-            assertEquals(bounds.height, splashBounds.height, 1f)
-            compose.onNodeWithContentDescription("Start").assertDoesNotExist()
-        } finally { compose.activityRule.scenario.recreate() }
-    }
-
     @Test fun sumiBrushKeepsDepositsFixedAndUsesUpItsInk() {
         val stroke = app.enso.meditation.ui.SumiStroke(1f, 500f, seed = 4)
         stroke.append(Offset.Zero, 0)
@@ -396,22 +373,22 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription("Brush settings").performClick()
             compose.onNodeWithText("Brush").assertDoesNotExist()
             compose.onNodeWithText("Changes apply to your next stroke.").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Brush Width").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) {
+            compose.onNodeWithContentDescription("Brush Width").performSemanticsAction(SemanticsActions.SetProgress) {
                 assertTrue(it(70f))
             }
-            compose.onNodeWithContentDescription("Brush Ink reach").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) {
+            compose.onNodeWithContentDescription("Brush Ink reach").performSemanticsAction(SemanticsActions.SetProgress) {
                 assertTrue(it(2f))
             }
             compose.runOnIdle {
                 assertEquals(70f, store.load().width, .001f)
                 assertEquals(2f, store.load().inkReach, .001f)
             }
-            compose.onNodeWithContentDescription("Copy brush values").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Copy brush values").performClick()
             compose.runOnIdle {
                 val clipboard = compose.activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 assertEquals(store.load().description(), clipboard.primaryClip!!.getItemAt(0).text.toString())
             }
-            compose.onNodeWithContentDescription("Close brush settings").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Close brush settings").performClick()
             compose.onNodeWithContentDescription("Enso painting canvas").assert(
                 SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Empty canvas"))
             compose.onNodeWithContentDescription("Close painting").performClick()
@@ -422,9 +399,9 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription("Brush Width").assert(SemanticsMatcher("Retained width") {
                 it.config[SemanticsProperties.ProgressBarRangeInfo].current == 70f
             })
-            compose.onNodeWithText("Defaults").performScrollTo().performClick()
+            compose.onNodeWithText("Defaults").performClick()
             compose.runOnIdle { assertEquals(app.enso.meditation.ui.BrushSettings(), store.load()) }
-            compose.onNodeWithContentDescription("Close brush settings").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Close brush settings").performClick()
             compose.onNodeWithContentDescription("Close painting").performClick()
             compose.onNodeWithContentDescription("Settings").performClick()
             compose.onNodeWithContentDescription("App version ${BuildConfig.VERSION_NAME}").performScrollTo().assertIsDisplayed()
@@ -436,19 +413,20 @@ class EnsoSmokeTest {
         awaitState { it.ready }
         val imageStore = app.enso.meditation.ui.EnsoImageStore(compose.activity)
         val originalImage = imageStore.load()
+        val originalScale = imageStore.frameScale()
         val original = state
         try {
             val bounds = compose.onNodeWithContentDescription("Timer circle").fetchSemanticsNode().boundsInRoot
             compose.onNodeWithContentDescription("Paint an Enso").performClick()
             val canvas = compose.onNodeWithContentDescription("Enso painting canvas")
             val paintBounds = canvas.fetchSemanticsNode().boundsInRoot
-            assertEquals(bounds.left, paintBounds.left, 1f)
-            assertEquals(bounds.top, paintBounds.top, 1f)
-            assertEquals(bounds.width, paintBounds.width, 1f)
-            assertEquals(bounds.height, paintBounds.height, 1f)
+            assertEquals(bounds.center.x, paintBounds.center.x, 1f)
+            assertEquals(bounds.center.y, paintBounds.center.y, 1f)
+            assertTrue(paintBounds.width >= bounds.width)
+            assertEquals(paintBounds.width, paintBounds.height, 1f)
             compose.onNodeWithContentDescription("Save and use painted Enso").assertIsNotEnabled()
             canvas.performTouchInput {
-                val radius = width * app.enso.meditation.ui.ENSO_GUIDE_RADIUS
+                val radius = bounds.width * app.enso.meditation.ui.ENSO_GUIDE_RADIUS
                 fun point(degrees: Int): Offset {
                     val angle = Math.toRadians(degrees.toDouble())
                     return center + Offset(cos(angle).toFloat() * radius, sin(angle).toFloat() * radius)
@@ -460,7 +438,7 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription("Save and use painted Enso").performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty() }
             val first = imageStore.load()!!
-            assertEquals(bounds.width.toInt(), first.width)
+            assertEquals(paintBounds.width.toInt(), first.width)
             assertEquals(first.width, first.height)
             assertEquals("Paper and controls must not be saved", 0, android.graphics.Color.alpha(first.getPixel(0, 0)))
             assertEquals("The center must remain transparent", 0,
@@ -486,7 +464,7 @@ class EnsoSmokeTest {
             assertEquals(original.repeatCount, state.repeatCount)
             assertEquals(original.continuous, state.continuous)
         } finally {
-            if (originalImage != null) imageStore.save(originalImage) else imageStore.useStandard()
+            if (originalImage != null) imageStore.save(originalImage, originalScale) else imageStore.useStandard()
         }
     }
 

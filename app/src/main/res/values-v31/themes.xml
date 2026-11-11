@@ -1,11 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The system fixes its icon at screen center. Compose places the Enso at its timer bounds. -->
+    <!-- Android 12+ system splash: the Enso brush on washi paper. -->
     <style name="Theme.Enso.Splash" parent="Theme.Enso">
         <item name="android:windowBackground">@drawable/splash_background</item>
         <item name="android:windowSplashScreenBackground">@color/paper</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_empty</item>
-        <item name="android:windowSplashScreenIconBackgroundColor">@color/paper</item>
-        <item name="android:windowSplashScreenAnimationDuration">200</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/native_splash_enso</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
     </style>
 </resources>

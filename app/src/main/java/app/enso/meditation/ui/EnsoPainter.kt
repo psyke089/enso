@@ -14,11 +14,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
@@ -40,7 +44,7 @@ import kotlinx.coroutines.withContext
 
 /** Draw at the timer artwork bounds; only an explicit Save & use replaces its image. */
 @Composable
-internal fun EnsoPainter(artworkBounds: Rect, onSave: suspend (Bitmap) -> Unit,
+internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: Modifier, transitioning: Boolean, closing: Boolean, onSave: suspend (Bitmap) -> Unit,
     onUseStandard: suspend () -> Unit, onClose: () -> Unit) {
     val strokes = remember { mutableStateListOf<SumiStroke>() }
     val density = LocalDensity.current.density
@@ -53,7 +57,8 @@ internal fun EnsoPainter(artworkBounds: Rect, onSave: suspend (Bitmap) -> Unit,
     var drawing by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val currentSaving by rememberUpdatedState(saving)
+    val busy = saving || transitioning || closing
+    val currentSaving by rememberUpdatedState(busy)
     val scope = rememberCoroutineScope()
     fun persist(useStandard: Boolean) {
         saving = true
@@ -63,7 +68,7 @@ internal fun EnsoPainter(artworkBounds: Rect, onSave: suspend (Bitmap) -> Unit,
             try {
                 if (useStandard) onUseStandard() else {
                     val bitmap = withContext(Dispatchers.Default) {
-                        renderSumiImage(snapshot, artworkBounds.width.roundToInt(), density)
+                        renderSumiImage(snapshot, artworkBounds.width.roundToInt(), density).also { it.prepareToDraw() }
                     }
                     onSave(bitmap)
                 }
@@ -72,8 +77,9 @@ internal fun EnsoPainter(artworkBounds: Rect, onSave: suspend (Bitmap) -> Unit,
             finally { saving = false }
         }
     }
-    BackHandler { if (!saving) onClose() }
-    Box(Modifier.fillMaxSize().background(Paper).pointerInput(Unit) {
+    BackHandler { if (!busy) onClose() }
+    Box(Modifier.fillMaxSize().then(layerModifier).background(Paper)
+        .then(if (brushSettingsOpen) Modifier.clearAndSetSemantics {} else Modifier).pointerInput(Unit) {
         // Own hit testing even on the margins; touches must not reach the timer underneath.
         awaitEachGesture {
             awaitFirstDown(requireUnconsumed = false)
@@ -81,16 +87,16 @@ internal fun EnsoPainter(artworkBounds: Rect, onSave: suspend (Bitmap) -> Unit,
         }
     }) {
         WashiBackground(Modifier.matchParentSize())
-        Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+        Row(Modifier.zIndex(1f).fillMaxWidth().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
-            InkPainterIcon(PainterSymbol.Close, "Close painting", enabled = !saving, onClick = onClose)
-            InkPainterIcon(PainterSymbol.Brush, "Brush settings", enabled = !saving) { brushSettingsOpen = true }
-            InkAction("Reset painting", R.drawable.ink_reset, enabled = strokes.isNotEmpty() && !saving && !drawing,
+            InkPainterIcon(PainterSymbol.Close, "Close painting", enabled = !busy, onClick = onClose)
+            InkPainterIcon(PainterSymbol.Brush, "Brush settings", enabled = !busy) { brushSettingsOpen = true }
+            InkAction("Reset painting", R.drawable.ink_reset, enabled = strokes.isNotEmpty() && !busy && !drawing,
                 secondary = true) { strokes.clear() }
         }
         Canvas(Modifier.offset { IntOffset(artworkBounds.left.roundToInt(), artworkBounds.top.roundToInt()) }
-            .size(with(LocalDensity.current) { artworkBounds.width.toDp() },
+            .wrapContentSize(Alignment.TopStart, unbounded = true).size(with(LocalDensity.current) { artworkBounds.width.toDp() },
                 with(LocalDensity.current) { artworkBounds.height.toDp() }).clipToBounds()
             .semantics {
                 contentDescription = "Enso painting canvas"
@@ -107,7 +113,7 @@ internal fun EnsoPainter(artworkBounds: Rect, onSave: suspend (Bitmap) -> Unit,
                     if (currentSaving) return@awaitEachGesture
                     drawing = true
                     val stroke = SumiStroke(density,
-                        size.width.coerceAtMost(size.height) * ENSO_GUIDE_RADIUS * 2f * PI.toFloat(),
+                        guideBounds.width * ENSO_GUIDE_RADIUS * 2f * PI.toFloat(),
                         seed = strokes.size + 1, settings = currentSettings)
                     strokes += stroke
                     stroke.append(down.position, down.uptimeMillis)
@@ -124,18 +130,24 @@ internal fun EnsoPainter(artworkBounds: Rect, onSave: suspend (Bitmap) -> Unit,
                     } finally { stroke.finish(); drawing = false }
                 }
             }) {
-            // Centerline of the original ink ring, in exactly the same screen-space artwork bounds.
-            drawCircle(FadedInk.copy(alpha = .32f), radius = size.minDimension * ENSO_GUIDE_RADIUS,
-                style = Stroke(1.dp.toPx()))
-            for (stroke in strokes) brush.draw(this, stroke)
+            // Soft boundary bands mark the full-width export area without a hard box.
+            val feather = 18.dp.toPx()
+            drawRect(Brush.verticalGradient(listOf(FadedInk.copy(alpha = .12f), Color.Transparent),
+                startY = 0f, endY = feather), size = Size(size.width, feather))
+            drawRect(Brush.verticalGradient(listOf(Color.Transparent, FadedInk.copy(alpha = .12f)),
+                startY = size.height - feather, endY = size.height),
+                topLeft = Offset(0f, size.height - feather), size = Size(size.width, feather))
+            drawCircle(FadedInk.copy(alpha = .32f), radius = guideBounds.width * ENSO_GUIDE_RADIUS,
+                center = guideBounds.center - artworkBounds.topLeft, style = Stroke(1.dp.toPx()))
+            if (!transitioning) for (stroke in strokes) brush.draw(this, stroke)
         }
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(20.dp),
+        Column(Modifier.zIndex(1f).align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             error?.let { Text(it, color = Ink, fontSize = 13.sp) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                InkPainterIcon(PainterSymbol.Standard, "Use standard Enso", enabled = !saving && !drawing) { persist(true) }
+                InkPainterIcon(PainterSymbol.Trash, "Use standard Enso", enabled = !busy && !drawing) { persist(true) }
                 InkPainterIcon(PainterSymbol.Apply, "Save and use painted Enso",
-                    enabled = !saving && !drawing && strokes.isNotEmpty()) { persist(false) }
+                    enabled = !busy && !drawing && strokes.isNotEmpty()) { persist(false) }
             }
         }
     }

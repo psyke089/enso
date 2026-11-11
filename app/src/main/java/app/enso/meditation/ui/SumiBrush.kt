@@ -31,9 +31,9 @@ internal class SumiBrush {
             val across = (x - 63.5f) / 63.5f
             val along = (y - 63.5f) / 63.5f
             val edge = 1f - across * across - along * along
-            val fibers = grain(x / 3.7f, y / 19f, variant + 17)
-            val flecks = grain(x / 1.1f, y / 2.2f, variant + 51)
-            val pooling = grain(x / 17f, y / 23f, variant + 81)
+            val fibers = sumiGrain(x / 3.7f, y / 19f, variant + 17)
+            val flecks = sumiGrain(x / 1.1f, y / 2.2f, variant + 51)
+            val pooling = sumiGrain(x / 17f, y / 23f, variant + 81)
             val coverage = ((edge + (fibers - .5f) * .3f) * 5f).coerceIn(0f, 1f)
             val alpha = (coverage * (.4f + .35f * fibers + .25f * pooling) *
                 (.6f + .4f * flecks) * 255).roundToInt().coerceIn(0, 255)
@@ -145,14 +145,14 @@ internal class SumiStroke(val density: Float, private val inkDistance: Float, pr
         val wet = exp(-distance / reach * 1.8f)
         val spread = (1f + (1f - wet) * .16f) * lift
         val head = (.4f + distance / (16f * density)).coerceAtMost(1f)
-        val uneven = .93f + grain(distance / (18f * density), 0f, seed + 93) * .14f
+        val uneven = .93f + sumiGrain(distance / (18f * density), 0f, seed + 93) * .14f
         val width = radius * spread * head * uneven
         val angle = Math.toDegrees(atan2(tangent.y, tangent.x).toDouble()).toFloat() - 90f
         dabs += InkDab(center, width * 2, radius * .8f * lift,
-            angle + (grain(distance / (21f * density), 0f, seed) - .5f) * 8f,
+            angle + (sumiGrain(distance / (21f * density), 0f, seed) - .5f) * 8f,
             (.8f * wet.pow(2.2f) * lift * settings.flow).coerceAtMost(1f), (count + seed) % 4)
         for ((index, bristle) in bristles.withIndex()) {
-            val wander = (grain(distance / (24f * density), index.toFloat(), seed + 31) - .5f) * .08f
+            val wander = (sumiGrain(distance / (24f * density), index.toFloat(), seed + 31) - .5f) * .08f
             val target = center + normal * (width * (bristle.fraction + wander)) - tangent * (bristle.drag * settings.drag)
             val previous = bristle.position
             val next = previous?.let { it + (target - it) *
@@ -160,7 +160,7 @@ internal class SumiStroke(val density: Float, private val inkDistance: Float, pr
             val edgeDryness = abs(bristle.fraction).pow(2f)
             val remaining = (1f - distance / reach * bristle.load).coerceIn(0f, 1f)
             val ink = remaining * (1f - .32f * edgeDryness)
-            val paper = grain(distance / (4.5f * density), index * .73f, seed + 61)
+            val paper = sumiGrain(distance / (4.5f * density), index * .73f, seed + 61)
             val contact = (ink * .8f + .16f - paper * (.25f + edgeDryness * .4f)) * lift
             if (previous != null && contact > .07f) {
                 val opacity = ((contact * 5 + .5f).toInt()).coerceIn(0, 5)
@@ -193,7 +193,7 @@ internal class SumiStroke(val density: Float, private val inkDistance: Float, pr
 }
 
 /** Smooth, seeded paper variation: reproducible and independent of redraws. */
-private fun grain(x: Float, y: Float, seed: Int): Float {
+internal fun sumiGrain(x: Float, y: Float, seed: Int): Float {
     val ix = floor(x).toInt()
     val iy = floor(y).toInt()
     val fx = x - ix

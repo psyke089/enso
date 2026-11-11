@@ -1525,8 +1525,10 @@ use overlapping textured nib impressions and individually damped bristles. Speed
 width; ink depletes with travelled distance relative to the guide circumference, producing a dense
 start and dry separated hairs later. Deposited marks stay fixed as the stroke grows; lifting adds
 a short tapered finish. The renderer is local Canvas code with no additional Ink dependency. A visible but subdued circular guide sits beneath the ink; it does not
-snap or constrain the drawing. The square canvas matches the timer artwork's screen position and size;
-the guide traces the centerline of the standard ink ring.
+snap or constrain the drawing. The square canvas extends to both screen edges, centered on the
+timer artwork, with subtle feathered bands marking its upper and lower boundaries. The guide stays
+at the standard ink ring's centerline. Persist the canvas-to-guide scale alongside the one image so
+full-width strokes retain their size and position on the timer; older images default to scale 1.
 Allow multiple strokes. X and Android Back close the drawing area; Reset clears its strokes.
 The draft exists only while the drawing area is open until Save & use is tapped. That button renders
 only the ink to a transparent PNG, atomically replacing the one private saved Enso image, and applies
@@ -1543,15 +1545,21 @@ existing marks keep their appearance. Retain these experimental parameters local
 and restarts, with Defaults and Copy values controls for tuning feedback.
 Defaults: width 65 dp, flow 180%, ink reach 0.70 circles, 108 bristles, drag 0%,
 speed influence 200%, smoothing 5.0 dp. Migrate the former unchanged default preset; retain custom values.
-Show the build's version name discreetly beside the Settings heading, without a separate footer row.
+Show only v plus the build version at the left of the Settings header; omit the Settings title.
 
-The painter uses ink icons for close, brush settings, reset, restore standard and save/apply.
-The brush settings drawer omits its title and introductory text; close is an ink X, while Defaults
-and Copy values remain text actions. The OS launch window shows only the paper color (Android's
-system icon is fixed at screen center). Startup inside the app draws the chosen Enso at the timer's
-actual measured artwork bounds. Keep the ring visible for 600 ms after its first drawable frame,
-then fade out the overlay once preferences and artwork are loaded. Do not move or resize the Enso
-during this transition.
+The painter uses ink icons for close, a flowing swash for brush settings, reset, a trash can for
+removing the custom Enso/restoring the standard, and a checkmark for save/apply. The brush controls
+use a stable full-screen view with all seven controls, two columns in landscape, no draggable sheet
+or scrolling. Close is an ink X; Defaults and Copy values remain text actions.
+
+Use only the native OS launch splash with the standard Enso at the largest safe icon size and no
+icon background. There is no in-app splash overlay and no artificial startup delay.
+
+On save/apply, hold the rendered transparent ink image fixed at its canvas bounds while painter
+controls and guide fade out (180 ms), then the timer controls fade in (260 ms). The same image and
+frame scale bridge both screens without moving or resizing. Animate layer alpha without recomposing
+whole screens per frame, prepare the bitmap for drawing first, and dispose the painter after both fades. Close/discard and restore standard
+softly fade the painter away. These animations are transitions, not startup loading delays.
 
 # Lock-screen timer display
 

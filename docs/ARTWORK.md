@@ -49,7 +49,23 @@ Use case: stylized-concept. Asset type: single production Android meditation tim
 
 ## Painter controls (2026-11-11)
 
-Close, brush, apply/checkmark and restore-standard controls are code-native calligraphic icons in
+Close, brush-swash, apply/checkmark and trash/restore-standard controls are code-native calligraphic icons in
 `InkPainterIcon.kt`. The existing SumiBrush deposits textured strokes into a cached transparent
 128px image for each symbol; these are not generated image assets or an external icon font.
 Reset continues to use `ink_reset.png`. Spoken action labels and 48dp touch targets are retained.
+
+Brush settings uses the supplied `tmp/brush_settings_sliders.svg`, converted losslessly to
+`app/src/main/res/drawable/ink_brush_settings.xml`, retaining its original paths and even-odd fill.
+The PNG reference is superseded by this SVG.
+
+The native splash references `drawable-nodpi/native_splash_enso.png` directly. The original
+transparent `enso_splash.png` is trimmed, fitted to 288px and centered on a transparent 432px canvas
+with ImageMagick, preserving alpha and fitting Android's safe icon region. There is no XML icon
+wrapper, in-app splash or artificial delay. Android 13+ uses icon_preferred for warm launches too.
+
+The supplied brush-settings vector keeps its silhouette but is rasterized once at 256px with the
+same seeded ink-grain function used by SumiBrush. Warm charcoal #292823, mottled opacity and dry
+fibers replace the original cool flat fill, matching the other painter controls. Its 48dp touch
+target and 38dp displayed image size remain consistent with the other buttons.
+The native splash already fills the Android-safe 192dp motif circle in a 288dp transparent icon
+canvas (equivalently 288px of ink on the 432px source PNG); keep that maximum uncropped size.

@@ -2,8 +2,6 @@ package app.enso.meditation.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
@@ -42,10 +40,12 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
@@ -58,6 +58,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -66,7 +67,6 @@ import app.enso.meditation.BuildConfig
 import app.enso.meditation.R
 import app.enso.meditation.ui.theme.*
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -88,27 +88,34 @@ fun EnsoScreen(
     val context = LocalContext.current
     val imageStore = remember(context) { EnsoImageStore(context) }
     var customEnso by remember { mutableStateOf<ImageBitmap?>(null) }
-    var artworkLoaded by remember { mutableStateOf(false) }
-    val startup = remember { MutableTransitionState(true) }
-    var splashShown by remember { mutableStateOf(false) }
-    LaunchedEffect(circleBounds != null && artworkLoaded) {
-        if (circleBounds != null && artworkLoaded) {
-            // Begin the brief display only once an Enso can actually be drawn.
-            withFrameNanos { }
-            delay(600)
-            splashShown = true
+    var customFrameScale by remember { mutableFloatStateOf(1f) }
+    var viewSize by remember { mutableStateOf(IntSize.Zero) }
+    val scope = rememberCoroutineScope()
+    val painterOpacity = remember { Animatable(1f) }
+    val mainOpacity = remember { Animatable(1f) }
+    var handingOff by remember { mutableStateOf(false) }
+    var painterClosing by remember { mutableStateOf(false) }
+    var handoffImage by remember { mutableStateOf<ImageBitmap?>(null) }
+    var handoffBounds by remember { mutableStateOf<Rect?>(null) }
+    LaunchedEffect(imageStore) {
+        val saved = withContext(Dispatchers.IO) { imageStore.load()?.asImageBitmap() to imageStore.frameScale() }
+        customEnso = saved.first
+        customFrameScale = saved.second
+    }
+    fun closePainter() {
+        if (painterClosing) return
+        painterClosing = true
+        scope.launch {
+            painterOpacity.animateTo(0f, tween(160))
+            paintingOpen = false
+            painterOpacity.snapTo(1f)
+            painterClosing = false
         }
     }
-    LaunchedEffect(imageStore) {
-        customEnso = withContext(Dispatchers.IO) { imageStore.load()?.asImageBitmap() }
-        artworkLoaded = true
-    }
-    val loading = !state.ready || !artworkLoaded
-    startup.targetState = loading || circleBounds == null || !splashShown
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {
         WashiBackground(Modifier.matchParentSize())
-        Box(Modifier.fillMaxSize().alpha(if (loading) 0f else 1f)
-            .then(if (paintingOpen || loading) Modifier.clearAndSetSemantics {} else Modifier)) {
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = mainOpacity.value }
+            .then(if (paintingOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
             WashiBackground(Modifier.matchParentSize())
             SumiLandscape(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -126,7 +133,7 @@ fun EnsoScreen(
                         InkSettingsButton { settingsOpen = true }
                     }
                     Spacer(Modifier.height(topSpace))
-                    TimerCircle(state, adjustDuration, adjustRepetitions, customEnso,
+                    TimerCircle(state, adjustDuration, adjustRepetitions, customEnso, customFrameScale, !handingOff,
                         Modifier.size(circleSize).onGloballyPositioned { circleBounds = Rect(it.positionInRoot(), it.size.toSize()) })
                     RepetitionDisplay(state)
                     Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
@@ -171,39 +178,46 @@ fun EnsoScreen(
                 }
             }
         }
-        // The startup Enso uses the actual laid-out timer bounds, including system insets.
-        // Only the surrounding UI fades in; the ring never changes its position or scale.
-        AnimatedVisibility(visibleState = startup, enter = EnterTransition.None,
-            exit = fadeOut(tween(180))) {
-            Box(Modifier.fillMaxSize().pointerInput(Unit) {
-                awaitEachGesture {
-                    awaitFirstDown()
-                    do { val event = awaitPointerEvent() } while (event.changes.any { it.pressed })
-                }
-            }) {
-                WashiBackground(Modifier.matchParentSize())
-                circleBounds?.let { bounds ->
-                    Box(Modifier.offset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
-                        .size(with(LocalDensity.current) { bounds.width.toDp() },
-                            with(LocalDensity.current) { bounds.height.toDp() })
-                        .clearAndSetSemantics { testTag = "Enso splash ring" }) {
-                        EnsoArtwork(Modifier.fillMaxSize(), customImage = customEnso,
-                            paused = state.phase == TimerPhase.Paused)
-                    }
-                }
-            }
-        }
         if (paintingOpen) circleBounds?.let { bounds ->
-            EnsoPainter(bounds, onSave = { bitmap ->
-                withContext(Dispatchers.IO) { imageStore.save(bitmap) }
+            val side = viewSize.width.toFloat()
+            val paintBounds = Rect(bounds.center.x - side / 2, bounds.center.y - side / 2,
+                bounds.center.x + side / 2, bounds.center.y + side / 2)
+            EnsoPainter(paintBounds, bounds, Modifier.graphicsLayer { alpha = painterOpacity.value },
+                handingOff, painterClosing, onSave = { bitmap ->
+                val scale = side / bounds.width
+                withContext(Dispatchers.IO) { imageStore.save(bitmap, scale) }
                 customEnso = bitmap.asImageBitmap()
-                paintingOpen = false
+                customFrameScale = scale
+                handoffBounds = paintBounds
+                handoffImage = customEnso
+                handingOff = true
+                // The root owns this animation so it continues after the painter is removed.
+                scope.launch {
+                    mainOpacity.snapTo(0f)
+                    withFrameNanos { }
+                    painterOpacity.animateTo(0f, tween(180))
+                    mainOpacity.animateTo(1f, tween(260))
+                    // Defer disposal until both animations have finished.
+                    paintingOpen = false
+                    handingOff = false
+                    handoffImage = null
+                    painterOpacity.snapTo(1f)
+                }
             }, onUseStandard = {
                 withContext(Dispatchers.IO) { imageStore.useStandard() }
                 customEnso = null
-                paintingOpen = false
-            }, onClose = { paintingOpen = false })
+                customFrameScale = 1f
+                closePainter()
+            }, onClose = { closePainter() })
         }
+        // One image bridges both screens while their controls fade around it.
+        handoffImage?.let { image -> handoffBounds?.let { bounds ->
+            Image(image, contentDescription = null, alpha = if (state.phase == TimerPhase.Paused) .55f else .92f,
+                modifier = Modifier.offset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
+                    .wrapContentSize(Alignment.TopStart, unbounded = true).size(with(LocalDensity.current) { bounds.width.toDp() },
+                        with(LocalDensity.current) { bounds.height.toDp() }))
+        } }
+
     }
 }
 
@@ -343,10 +357,11 @@ private fun Saying(text: String, visible: Boolean) {
 
 @Composable
 private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit,
-    adjustRepetitions: (Int) -> Unit, customEnso: ImageBitmap?, modifier: Modifier) {
+    adjustRepetitions: (Int) -> Unit, customEnso: ImageBitmap?, frameScale: Float, showArtwork: Boolean, modifier: Modifier) {
     var brushRotation by rememberSaveable(customEnso) { mutableFloatStateOf(0f) }
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
-        EnsoArtwork(Modifier.fillMaxSize(), paused = state.phase == TimerPhase.Paused,
+        if (showArtwork) EnsoArtwork(if (customEnso == null) Modifier.fillMaxSize()
+            else Modifier.requiredSize(maxWidth * frameScale), paused = state.phase == TimerPhase.Paused,
             rotationDegrees = brushRotation, customImage = customEnso)
         val fontScale = LocalDensity.current.fontScale
         val textSize = maxWidth.value * (if (state.remainingMs > 3_599_000) .108f else .157f) /
@@ -485,10 +500,8 @@ private fun SettingsPanel(
         }
         Row(Modifier.fillMaxWidth().padding(bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Text("Settings", color = FadedInk.copy(alpha = .65f), fontFamily = FontFamily.Serif,
-                fontSize = 14.sp, letterSpacing = .3.sp, modifier = Modifier.weight(1f))
-            Text(BuildConfig.VERSION_NAME, color = FadedInk.copy(alpha = .55f), fontSize = 10.sp,
-                modifier = Modifier.padding(end = 6.dp)
+            Text("v${BuildConfig.VERSION_NAME}", color = FadedInk.copy(alpha = .65f), fontFamily = FontFamily.Serif,
+                fontSize = 12.sp, modifier = Modifier.weight(1f)
                     .semantics { contentDescription = "App version ${BuildConfig.VERSION_NAME}" })
             Box(Modifier.size(44.dp).offset(x = 7.dp).clip(CircleShape)
                 .clickable(interactionSource = remember { MutableInteractionSource() },
