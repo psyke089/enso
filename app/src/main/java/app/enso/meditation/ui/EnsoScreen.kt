@@ -4,7 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -89,6 +89,7 @@ fun EnsoScreen(
     previewGong: (GongChoice) -> Unit,
     animateLaunch: Boolean = false,
     splashReleased: Boolean = true,
+    splashBounds: Rect? = null,
     action: (SessionAction) -> Unit,
 ) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -101,7 +102,7 @@ fun EnsoScreen(
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     val scope = rememberCoroutineScope()
     val painterOpacity = remember { Animatable(1f) }
-    val launchInkOpacity = remember { Animatable(1f) }
+    val launchToPainter = remember { animateLaunch && imageStore.shouldPromptToday() }
     var foregroundVisit by remember { mutableIntStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -127,7 +128,7 @@ fun EnsoScreen(
     var handoffImage by remember { mutableStateOf<ImageBitmap?>(null) }
     var handoffBounds by remember { mutableStateOf<Rect?>(null) }
     LaunchedEffect(imageStore) {
-        val saved = withContext(Dispatchers.IO) { imageStore.load()?.asImageBitmap() to imageStore.frameScale() }
+        val saved = withContext(Dispatchers.IO) { imageStore.load()?.also { it.prepareToDraw() }?.asImageBitmap() to imageStore.frameScale() }
         customEnso = saved.first
         customFrameScale = saved.second
         artworkLoaded = true
@@ -144,16 +145,12 @@ fun EnsoScreen(
     }
     LaunchedEffect(splashReleased, artworkLoaded, circleBounds != null, state.ready) {
         if (!launchComplete && splashReleased && artworkLoaded && circleBounds != null && state.ready) {
-            launchMotion.animateTo(1f, tween(850, easing = FastOutSlowInEasing))
-            if (imageStore.shouldPromptToday()) {
-                painterOpacity.snapTo(0f)
-                paintingOpen = true
-                coroutineScope {
-                    launch { painterOpacity.animateTo(1f, tween(450)) }
-                    launch { launchInkOpacity.animateTo(0f, tween(450)) }
-                }
-                mainOpacity.snapTo(1f)
-            } else mainOpacity.animateTo(1f, tween(450))
+            // Both destinations are composed before the first moving frame. One clock keeps
+            // translation, artwork blending and the controls continuous, without a mid-flight mount.
+            withFrameNanos { }
+            launchMotion.animateTo(1f, tween(1200, easing = LinearEasing))
+            if (launchToPainter) paintingOpen = true
+            mainOpacity.snapTo(1f)
             launchComplete = true
         }
     }
@@ -170,9 +167,15 @@ fun EnsoScreen(
     }
     Box(Modifier.fillMaxSize().onSizeChanged { viewSize = it }) {
         WashiBackground(Modifier.matchParentSize())
-        Box(Modifier.fillMaxSize().graphicsLayer { alpha = mainOpacity.value }
+        if (!launchComplete) Box(Modifier.matchParentSize().graphicsLayer {
+            alpha = 1f - launchFraction(launchMotion.value, 0f, .55f)
+        }.background(Paper))
+        Box(Modifier.fillMaxSize().graphicsLayer {
+            alpha = if (!launchComplete) {
+                if (launchToPainter) 0f else launchFraction(launchMotion.value, .55f, 1f)
+            } else mainOpacity.value
+        }
             .then(if (paintingOpen || !launchComplete) Modifier.clearAndSetSemantics {} else Modifier)) {
-            WashiBackground(Modifier.matchParentSize())
             SumiLandscape(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
                 val compact = maxHeight < 580.dp
@@ -240,11 +243,14 @@ fun EnsoScreen(
                 }
             }
         }
-        if (paintingOpen) circleBounds?.let { bounds ->
+        if (paintingOpen || (!launchComplete && launchToPainter)) circleBounds?.let { bounds ->
             val side = viewSize.width.toFloat()
             val paintBounds = Rect(bounds.center.x - side / 2, bounds.center.y - side / 2,
                 bounds.center.x + side / 2, bounds.center.y + side / 2)
-            EnsoPainter(paintBounds, bounds, Modifier.graphicsLayer { alpha = painterOpacity.value },
+            EnsoPainter(paintBounds, bounds, Modifier.graphicsLayer {
+                alpha = if (!launchComplete) launchFraction(launchMotion.value, .22f, .94f)
+                    else painterOpacity.value
+            }.then(if (!launchComplete) Modifier.clearAndSetSemantics {} else Modifier),
                 handingOff, painterClosing || !launchComplete, onSave = { bitmap ->
                 val scale = side / bounds.width
                 withContext(Dispatchers.IO) { imageStore.save(bitmap, scale) }
@@ -285,22 +291,30 @@ fun EnsoScreen(
         })
         if (!launchComplete) circleBounds?.let { bounds ->
             val density = LocalDensity.current
-            val initialSide = with(density) { 288.dp.toPx() }
-            val finalSide = bounds.width * if (customEnso != null) customFrameScale else 1f
+            val initialSide = splashBounds?.width ?: with(density) { 288.dp.toPx() }
+            val initialCenter = splashBounds?.center ?: Offset(viewSize.width / 2f, viewSize.height / 2f)
+            // The native PNG's ink occupies 2/3 of its canvas. Match that ink to the
+            // drawing guide, rather than briefly displaying yesterday's timer artwork.
+            val finalSide = if (launchToPainter) bounds.width * ENSO_GUIDE_RADIUS * 3f
+                else bounds.width * if (customEnso != null) customFrameScale else 1f
             // Transform a cached layer; do not relayout the screen on every animation frame.
             Box(Modifier.size(with(density) { finalSide.toDp() })
                 .graphicsLayer {
-                    alpha = launchInkOpacity.value
-                    val progress = launchMotion.value
+                    val progress = launchFraction(launchMotion.value, 0f, .88f)
                     val side = initialSide + (finalSide - initialSide) * progress
                     scaleX = side / finalSide
                     scaleY = scaleX
-                    translationX = viewSize.width / 2f + (bounds.center.x - viewSize.width / 2f) * progress - finalSide / 2f
-                    translationY = viewSize.height / 2f + (bounds.center.y - viewSize.height / 2f) * progress - finalSide / 2f
+                    translationX = initialCenter.x + (bounds.center.x - initialCenter.x) * progress - finalSide / 2f
+                    translationY = initialCenter.y + (bounds.center.y - initialCenter.y) * progress - finalSide / 2f
                 }) {
                 Image(painterResource(R.drawable.native_splash_enso), null,
-                    Modifier.fillMaxSize().graphicsLayer { alpha = 1f - launchMotion.value })
-                Box(Modifier.fillMaxSize().graphicsLayer { alpha = launchMotion.value }) {
+                    Modifier.fillMaxSize().graphicsLayer {
+                        alpha = 1f - launchFraction(launchMotion.value,
+                            if (launchToPainter) .12f else .1f, if (launchToPainter) .85f else .82f)
+                    })
+                if (!launchToPainter) Box(Modifier.fillMaxSize().graphicsLayer {
+                    alpha = launchFraction(launchMotion.value, .1f, .82f)
+                }) {
                     EnsoArtwork(Modifier.fillMaxSize(), paused = state.phase == TimerPhase.Paused, customImage = customEnso)
                 }
             }
@@ -730,4 +744,10 @@ private fun InkToggle(checked: Boolean) {
             drawCircle(Ink.copy(alpha = .9f), size.minDimension * .24f * progress, center)
         }
     }
+}
+
+/** Smoothstep has zero velocity at either end, including staggered fades on the launch clock. */
+private fun launchFraction(progress: Float, start: Float, end: Float): Float {
+    val t = ((progress - start) / (end - start)).coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t)
 }

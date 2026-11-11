@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val controller get() = (application as EnsoApplication).controller
+    private var splashBounds by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
     private var splashReleased by mutableStateOf(Build.VERSION.SDK_INT < 31)
     private var notificationRequested = false
     private val notifications = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -32,8 +33,20 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (Build.VERSION.SDK_INT >= 31) {
             splashScreen.setOnExitAnimationListener { splash ->
-                splash.remove()
+                val icon = splash.iconView
+                if (icon != null && icon.width > 0) {
+                    val iconPosition = IntArray(2)
+                    val rootPosition = IntArray(2)
+                    icon.getLocationOnScreen(iconPosition)
+                    window.decorView.getLocationOnScreen(rootPosition)
+                    val left = (iconPosition[0] - rootPosition[0]).toFloat()
+                    val top = (iconPosition[1] - rootPosition[1]).toFloat()
+                    splashBounds = androidx.compose.ui.geometry.Rect(left, top,
+                        left + icon.width, top + icon.height)
+                }
+                // Remove on the next frame, after Compose receives the native icon bounds.
                 splashReleased = true
+                window.decorView.postOnAnimation { splash.remove() }
             }
         }
         notificationRequested = savedInstanceState?.getBoolean("notification_requested") ?: false
@@ -61,7 +74,7 @@ class MainActivity : ComponentActivity() {
                 EnsoScreen(state, controller::adjustDuration, controller::adjustRepetitions,
                     controller::changeSettings,
                     controller::previewGong, animateLaunch = savedInstanceState == null,
-                    splashReleased = splashReleased) { action ->
+                    splashReleased = splashReleased, splashBounds = splashBounds) { action ->
                     MeditationService.send(this, action)
                     if (action == SessionAction.Start) requestNotifications()
                 }

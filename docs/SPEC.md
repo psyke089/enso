@@ -1554,7 +1554,11 @@ or scrolling. Close is an ink X; Defaults and Copy values remain text actions.
 
 Use the native OS launch splash with the standard Enso at the largest safe icon size and no
 icon background. On fresh activity launch, continue that mark into the timer position with an
-850 ms eased translation/scale and artwork crossfade, then reveal the controls over 450 ms.
+a shared 1200 ms timeline for eased translation/scale and artwork crossfade; controls fade in
+during the final portion of the movement. Match the native icon's measured bounds on Android 12+.
+For the daily drawing invitation, move the splash ink toward the guide and dissolve it directly
+into the empty canvas, without showing the previous timer artwork. Prepare the painter before
+motion begins, soften the paper reveal, and animate only layers during the transition.
 Do not replay on activity recreation. Respect the system animation duration scale.
 
 On save/apply, hold the rendered transparent ink image fixed at its canvas bounds while painter
