@@ -69,7 +69,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        controller.prepareAdjustmentFeedback()
+    }
+
     override fun onStop() {
+        controller.releaseAdjustmentFeedback()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         super.onStop()
     }

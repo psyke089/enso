@@ -21,6 +21,7 @@ data class EnsoSettings(
     val showSaying: Boolean = true,
     val rotationStepMinutes: Int = 5,
     val showTime: Boolean = true,
+    val hapticFeedback: Boolean = true,
 )
 
 enum class TimerPhase { Idle, Running, Paused }
@@ -61,6 +62,7 @@ data class TimerUiState(
 )
 
 sealed interface TimerEvent {
+    data object SelectionTick : TimerEvent
     data object StartGong : TimerEvent
     data class IntervalCompleted(val gong: Boolean, val vibrate: Boolean) : TimerEvent
 }
@@ -86,25 +88,31 @@ class TimerEngine(snapshot: TimerSnapshot = TimerSnapshot(), nowMs: Long = 0) {
         advance(nowMs, emit = false)
     }
 
-    fun adjustDuration(direction: Int) {
-        if (snapshot.session != null) return
-        snapshot = snapshot.copy(selectedMs =
-            (snapshot.selectedMs + direction.coerceIn(-1, 1) * snapshot.settings.rotationStepMinutes * 60_000L)
-                .coerceIn(DURATION_STEP, MAX_DURATION))
+    fun adjustDuration(direction: Int): List<TimerEvent> {
+        if (snapshot.session != null) return emptyList()
+        val selected = (snapshot.selectedMs + direction.coerceIn(-1, 1) * snapshot.settings.rotationStepMinutes * 60_000L)
+            .coerceIn(DURATION_STEP, MAX_DURATION)
+        if (selected == snapshot.selectedMs) return emptyList()
+        snapshot = snapshot.copy(selectedMs = selected)
+        return selectionFeedback()
     }
 
     fun updateSettings(settings: EnsoSettings) {
         snapshot = snapshot.copy(settings = normalizeSettings(settings))
     }
 
-    fun adjustRepetitions(direction: Int) {
-        if (snapshot.session != null) return
-        if (direction == 0) return
+    fun adjustRepetitions(direction: Int): List<TimerEvent> {
+        if (snapshot.session != null || direction == 0) return emptyList()
         val count = if (snapshot.repeatForever) 0 else snapshot.repeatCount
         val next = (count + direction.coerceIn(-1, 1)).coerceIn(0, MAX_REPETITIONS)
+        if (next == count) return emptyList()
         snapshot = snapshot.copy(repeatCount = if (next == 0) snapshot.repeatCount else next,
             repeatForever = next == 0)
+        return selectionFeedback()
     }
+
+    private fun selectionFeedback(): List<TimerEvent> =
+        if (snapshot.settings.hapticFeedback) listOf(TimerEvent.SelectionTick) else emptyList()
 
     fun setRepeatForever(forever: Boolean) {
         if (snapshot.session == null) snapshot = snapshot.copy(repeatForever = forever)

@@ -14,6 +14,57 @@ class TimerEngineTest {
         assertEquals(EnsoSettings(true, true, true, true, false), engine.snapshot.settings)
     }
 
+    @Test fun everyActualSelectionChangeEmitsOneTick() {
+        val engine = TimerEngine()
+        val tick = listOf(TimerEvent.SelectionTick)
+        assertEquals(tick, engine.adjustDuration(1))
+        assertEquals(tick, engine.adjustDuration(-1))
+        assertEquals(tick, engine.adjustRepetitions(-1)) // 1 to unlimited
+        assertEquals(tick, engine.adjustRepetitions(1)) // unlimited to 1
+        assertEquals(tick, engine.adjustRepetitions(1))
+        assertEquals(tick, engine.adjustRepetitions(-1))
+    }
+
+    @Test fun selectionBoundsAndZeroInputDoNotTick() {
+        val lower = TimerEngine(TimerSnapshot(selectedMs = DURATION_STEP, repeatForever = true))
+        assertTrue(lower.adjustDuration(-1).isEmpty())
+        assertTrue(lower.adjustRepetitions(-1).isEmpty())
+        assertTrue(lower.adjustDuration(0).isEmpty())
+        assertTrue(lower.adjustRepetitions(0).isEmpty())
+        val upper = TimerEngine(TimerSnapshot(selectedMs = MAX_DURATION, repeatCount = MAX_REPETITIONS))
+        assertTrue(upper.adjustDuration(1).isEmpty())
+        assertTrue(upper.adjustRepetitions(1).isEmpty())
+    }
+
+    @Test fun disabledHapticsDoNotChangeSelectionsOrIntervalVibration() {
+        val engine = TimerEngine(TimerSnapshot(settings = EnsoSettings(hapticFeedback = false, vibration = true)))
+        assertTrue(engine.adjustDuration(1).isEmpty())
+        assertEquals(DEFAULT_DURATION + DURATION_STEP, engine.snapshot.selectedMs)
+        assertTrue(engine.adjustRepetitions(1).isEmpty())
+        assertEquals(2, engine.snapshot.repeatCount)
+        val restored = TimerEngine(engine.snapshot)
+        assertFalse(restored.snapshot.settings.hapticFeedback)
+        restored.start(0)
+        assertEquals(listOf(TimerEvent.IntervalCompleted(true, true)), restored.advance(restored.snapshot.selectedMs))
+    }
+
+    @Test fun sessionsRejectSelectionFeedbackAndControlsNeverEmitTicks() {
+        val engine = TimerEngine()
+        assertFalse(TimerEvent.SelectionTick in engine.start(0))
+        assertTrue(engine.adjustDuration(1).isEmpty())
+        assertTrue(engine.adjustRepetitions(1).isEmpty())
+        assertFalse(TimerEvent.SelectionTick in engine.pause(1))
+        assertTrue(engine.adjustDuration(-1).isEmpty())
+        assertTrue(engine.adjustRepetitions(-1).isEmpty())
+        engine.resume(2)
+        assertEquals(TimerPhase.Running, engine.uiState(2).phase)
+        engine.stop()
+        engine.updateSettings(engine.snapshot.settings.copy(hapticFeedback = false))
+        assertTrue(engine.adjustDuration(1).isEmpty())
+        engine.updateSettings(engine.snapshot.settings.copy(hapticFeedback = true))
+        assertEquals(listOf(TimerEvent.SelectionTick), engine.adjustDuration(-1))
+    }
+
     @Test fun durationChangesByExactlyFiveMinutes() {
         val engine = TimerEngine()
         engine.adjustDuration(1)

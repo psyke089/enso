@@ -21,6 +21,7 @@ class SessionController(application: Application) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val store = EnsoStore(application)
     private val audio = GongPlayer(application)
+    private val adjustmentFeedback = AdjustmentFeedback(application)
     private val mutex = Mutex()
     private val mutableState = MutableStateFlow(TimerUiState())
     val state = mutableState.asStateFlow()
@@ -53,11 +54,14 @@ class SessionController(application: Application) {
         mutex.withLock {
             val before = engine.snapshot
             val events = engine.block()
+            // Selection feedback is immediate; boundary gongs still wait for persistence below.
+            if (TimerEvent.SelectionTick in events) adjustmentFeedback.tick()
             // Commit the consumed boundary before audio, preventing replay after process death.
             if (before != engine.snapshot) persist()
             publish()
             events.forEach { event ->
                 when (event) {
+                    TimerEvent.SelectionTick -> Unit
                     TimerEvent.StartGong -> audio.play(engine.snapshot.settings.startGongSound)
                     is TimerEvent.IntervalCompleted -> {
                         if (event.gong) {
@@ -75,11 +79,15 @@ class SessionController(application: Application) {
         }
     }
 
-    fun adjustDuration(direction: Int) { scope.launch { mutate { adjustDuration(direction); emptyList() } } }
+    fun adjustDuration(direction: Int) { scope.launch { mutate { adjustDuration(direction) } } }
 
-    fun adjustRepetitions(direction: Int) { scope.launch { mutate { adjustRepetitions(direction); emptyList() } } }
+    fun adjustRepetitions(direction: Int) { scope.launch { mutate { adjustRepetitions(direction) } } }
 
     fun setRepeatForever(forever: Boolean) { scope.launch { mutate { setRepeatForever(forever); emptyList() } } }
+
+    fun prepareAdjustmentFeedback() = adjustmentFeedback.prepare()
+
+    fun releaseAdjustmentFeedback() = adjustmentFeedback.release()
 
     suspend fun onLaunch() = mutate { refreshSaying(); emptyList() }
 

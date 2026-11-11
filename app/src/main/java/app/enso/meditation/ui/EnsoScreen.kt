@@ -434,6 +434,9 @@ private fun SettingsPanel(
                 })
             PickerArrow("›", "Larger minute step") { select(1) }
         }
+        Setting("Haptic Feedback", settings.hapticFeedback) { value ->
+            changeSettings { it.copy(hapticFeedback = value) }
+        }
         Setting("Start Gong", settings.startGong,
             gong = settings.startGongSound,
             onGong = { choice ->

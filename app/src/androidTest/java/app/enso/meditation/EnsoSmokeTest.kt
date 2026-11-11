@@ -88,8 +88,8 @@ class EnsoSmokeTest {
         assertEquals(TimerPhase.Idle, state.phase)
         val original = state
         try {
-            controller.changeSettings { it.copy(showSaying = true, rotationStepMinutes = 5, showTime = true) }
-            awaitState { it.settings.showSaying && it.settings.showTime && it.settings.rotationStepMinutes == 5 && it.saying.isNotEmpty() }
+            controller.changeSettings { it.copy(showSaying = true, rotationStepMinutes = 5, showTime = true, hapticFeedback = true) }
+            awaitState { it.settings.showSaying && it.settings.showTime && it.settings.hapticFeedback && it.settings.rotationStepMinutes == 5 && it.saying.isNotEmpty() }
             compose.waitUntil(5_000) {
                 runCatching { compose.onNodeWithText(state.saying).assertIsDisplayed() }.isSuccess
             }
@@ -106,7 +106,13 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription("Smaller minute step").performClick()
             awaitState { it.settings.rotationStepMinutes == 2 }
             assertEquals(2, runBlocking { EnsoStore(compose.activity).load() }.settings.rotationStepMinutes)
+            compose.onNodeWithText("Haptic Feedback").performScrollTo().performClick()
+            awaitState { !it.settings.hapticFeedback }
+            assertFalse(runBlocking { EnsoStore(compose.activity).load() }.settings.hapticFeedback)
             compose.activityRule.scenario.recreate()
+            awaitState { !it.settings.hapticFeedback }
+            compose.onNodeWithText("Haptic Feedback").performScrollTo().performClick()
+            awaitState { it.settings.hapticFeedback }
             compose.onNodeWithContentDescription("2 minutes per rotation step").assertIsDisplayed()
             compose.onNodeWithContentDescription("Larger minute step").performClick()
             awaitState { it.settings.rotationStepMinutes == 5 }
