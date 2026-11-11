@@ -69,65 +69,71 @@ fun EnsoScreen(
     action: (SessionAction) -> Unit,
 ) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var paintingOpen by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize()) {
-        WashiBackground(Modifier.matchParentSize())
-        SumiLandscape(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
-        BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
-            val compact = maxHeight < 580.dp
-            val topSpace = if (compact) 8.dp else (maxHeight * .045f).coerceAtMost(48.dp)
-            val circleSize = minOf(maxWidth - 24.dp, if (compact) 290.dp else 380.dp,
-                (maxHeight - topSpace - 400.dp).coerceAtLeast(180.dp))
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally) {
-                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically) {
-                    InkSettingsButton { settingsOpen = true }
+        Box(Modifier.fillMaxSize().then(if (paintingOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
+            WashiBackground(Modifier.matchParentSize())
+            SumiLandscape(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
+            BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
+                val compact = maxHeight < 580.dp
+                val topSpace = if (compact) 8.dp else (maxHeight * .045f).coerceAtMost(48.dp)
+                val circleSize = minOf(maxWidth - 24.dp, if (compact) 290.dp else 380.dp,
+                    (maxHeight - topSpace - 400.dp).coerceAtLeast(180.dp))
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally) {
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically) {
+                        InkPaintButton { paintingOpen = true }
+                        Spacer(Modifier.width(8.dp))
+                        InkSettingsButton { settingsOpen = true }
+                    }
+                    Spacer(Modifier.height(topSpace))
+                    TimerCircle(state, adjustDuration, adjustRepetitions, Modifier.size(circleSize))
+                    RepetitionDisplay(state)
+                    Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
+                    InkAction(
+                        label = when (state.phase) { TimerPhase.Idle -> "Start"; TimerPhase.Running -> "Pause"; TimerPhase.Paused -> "Resume" },
+                        artwork = if (state.phase == TimerPhase.Running) R.drawable.ink_pause else R.drawable.ink_start,
+                        enabled = state.ready,
+                        onClick = { action(when (state.phase) {
+                            TimerPhase.Idle -> SessionAction.Start
+                            TimerPhase.Running -> SessionAction.Pause
+                            TimerPhase.Paused -> SessionAction.Resume
+                        }) },
+                    )
+                    Box(Modifier.height(52.dp), contentAlignment = Alignment.Center) {
+                        if (state.phase != TimerPhase.Idle) InkAction("Reset", R.drawable.ink_reset,
+                            enabled = state.ready, secondary = true) { action(SessionAction.Stop) }
+                    }
+                    if (state.storageWarning) Text("Changes could not be saved on this device.",
+                        color = Vermilion, fontSize = 13.sp,
+                        modifier = Modifier.padding(horizontal = 24.dp), textAlign = TextAlign.Center)
+                    Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
+                    Saying(state.saying, state.ready && state.settings.showSaying)
                 }
-                Spacer(Modifier.height(topSpace))
-                TimerCircle(state, adjustDuration, adjustRepetitions, Modifier.size(circleSize))
-                RepetitionDisplay(state)
-                Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
-                InkAction(
-                    label = when (state.phase) { TimerPhase.Idle -> "Start"; TimerPhase.Running -> "Pause"; TimerPhase.Paused -> "Resume" },
-                    artwork = if (state.phase == TimerPhase.Running) R.drawable.ink_pause else R.drawable.ink_start,
-                    enabled = state.ready,
-                    onClick = { action(when (state.phase) {
-                        TimerPhase.Idle -> SessionAction.Start
-                        TimerPhase.Running -> SessionAction.Pause
-                        TimerPhase.Paused -> SessionAction.Resume
-                    }) },
-                )
-                Box(Modifier.height(52.dp), contentAlignment = Alignment.Center) {
-                    if (state.phase != TimerPhase.Idle) InkAction("Reset", R.drawable.ink_reset,
-                        enabled = state.ready, secondary = true) { action(SessionAction.Stop) }
+            }
+            AnimatedVisibility(
+                visible = settingsOpen,
+                enter = fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 4 },
+                exit = fadeOut(tween(180)) + slideOutVertically(tween(200)) { it / 4 },
+            ) {
+                BackHandler { settingsOpen = false }
+                Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.fillMaxSize().background(Ink.copy(alpha = .20f))
+                        .clickable(interactionSource = remember { MutableInteractionSource() },
+                            indication = null) { settingsOpen = false })
+                    SettingsPanel(
+                        settings = state.settings,
+                        changeSettings = changeSettings,
+                        previewGong = previewGong,
+                        onDone = { settingsOpen = false },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
                 }
-                if (state.storageWarning) Text("Changes could not be saved on this device.",
-                    color = Vermilion, fontSize = 13.sp,
-                    modifier = Modifier.padding(horizontal = 24.dp), textAlign = TextAlign.Center)
-                Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
-                Saying(state.saying, state.ready && state.settings.showSaying)
             }
         }
-        AnimatedVisibility(
-            visible = settingsOpen,
-            enter = fadeIn(tween(220)) + slideInVertically(tween(260)) { it / 4 },
-            exit = fadeOut(tween(180)) + slideOutVertically(tween(200)) { it / 4 },
-        ) {
-            BackHandler { settingsOpen = false }
-            Box(Modifier.fillMaxSize()) {
-                Box(Modifier.fillMaxSize().background(Ink.copy(alpha = .20f))
-                    .clickable(interactionSource = remember { MutableInteractionSource() },
-                        indication = null) { settingsOpen = false })
-                SettingsPanel(
-                    settings = state.settings,
-                    changeSettings = changeSettings,
-                    previewGong = previewGong,
-                    onDone = { settingsOpen = false },
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-            }
-        }
+        if (paintingOpen) EnsoPainter { paintingOpen = false }
     }
 }
 
@@ -216,7 +222,7 @@ private fun InkSettingsButton(onClick: () -> Unit) {
 
 /** Generated sumi brush artwork, with a full touch target and spoken action label. */
 @Composable
-private fun InkAction(label: String, artwork: Int, enabled: Boolean,
+internal fun InkAction(label: String, artwork: Int, enabled: Boolean,
     secondary: Boolean = false, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()

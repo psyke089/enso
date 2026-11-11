@@ -3,6 +3,7 @@ package app.enso.meditation
 import android.view.WindowManager
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asAndroidBitmap
 import kotlin.math.cos
@@ -290,4 +291,40 @@ class EnsoSmokeTest {
             awaitState { it.continuous == original.continuous && it.settings == original.settings }
         }
     }
+    @Test fun paintingIsTemporaryAndResetClearsOnlyTheDrawing() {
+        awaitState { it.ready }
+        val original = state
+        compose.onNodeWithContentDescription("Paint an Enso").performClick()
+        val canvas = compose.onNodeWithContentDescription("Enso painting canvas")
+        canvas.assertIsDisplayed()
+        compose.onNodeWithContentDescription("Start").assertDoesNotExist()
+        val blank = canvas.captureToImage().asAndroidBitmap()
+        canvas.performTouchInput {
+            val radius = minOf(width, height) * .34f
+            fun point(degrees: Int): Offset {
+                val angle = Math.toRadians(degrees.toDouble())
+                return center + Offset(cos(angle).toFloat() * radius, sin(angle).toFloat() * radius)
+            }
+            down(point(-120))
+            for (degrees in -115..200 step 5) moveTo(point(degrees), 16)
+            up()
+        }
+        canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1 brush stroke"))
+        assertFalse("Finger painting must produce ink on the paper", blank.sameAs(canvas.captureToImage().asAndroidBitmap()))
+        compose.onNodeWithContentDescription("Reset painting").performClick()
+        canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Empty canvas"))
+        assertTrue("Reset must leave the original paper", blank.sameAs(canvas.captureToImage().asAndroidBitmap()))
+        canvas.performTouchInput { click(center) }
+        compose.onNodeWithContentDescription("Close painting").performClick()
+        compose.onNodeWithContentDescription("Enso painting canvas").assertDoesNotExist()
+        assertEquals(original.selectedMs, state.selectedMs)
+        assertEquals(original.repeatCount, state.repeatCount)
+        assertEquals(original.continuous, state.continuous)
+        assertEquals(original.settings, state.settings)
+        compose.onNodeWithContentDescription("Paint an Enso").performClick()
+        canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Empty canvas"))
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithContentDescription("Enso painting canvas").assertDoesNotExist()
+    }
+
 }
