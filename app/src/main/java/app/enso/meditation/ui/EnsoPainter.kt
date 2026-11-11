@@ -1,9 +1,6 @@
 package app.enso.meditation.ui
 
-import android.content.res.Resources
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Paint
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -14,21 +11,22 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.enso.meditation.R
@@ -36,16 +34,46 @@ import app.enso.meditation.ui.theme.FadedInk
 import app.enso.meditation.ui.theme.Ink
 import app.enso.meditation.ui.theme.Paper
 import kotlin.math.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
-/** An ephemeral experiment: no settings, files, timer callbacks, or saved-state drawing. */
+/** Draw at the timer artwork bounds; only an explicit Save & use replaces its image. */
 @Composable
-internal fun EnsoPainter(onClose: () -> Unit) {
-    val strokes = remember { mutableStateListOf<InkStroke>() }
+internal fun EnsoPainter(artworkBounds: Rect, onSave: suspend (Bitmap) -> Unit,
+    onUseStandard: suspend () -> Unit, onClose: () -> Unit) {
+    val strokes = remember { mutableStateListOf<SumiStroke>() }
     val density = LocalDensity.current.density
-    val resources = LocalContext.current.resources
-    val brush = remember(resources) { unwrapEnsoInk(resources) }
-    val inkPaint = remember { Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply { alpha = 235 } }
-    BackHandler(onBack = onClose)
+    val brush = remember { SumiBrush() }
+    val context = LocalContext.current
+    val store = remember(context) { BrushSettingsStore(context) }
+    var settings by remember { mutableStateOf(store.load()) }
+    val currentSettings by rememberUpdatedState(settings)
+    var brushSettingsOpen by remember { mutableStateOf(false) }
+    var drawing by remember { mutableStateOf(false) }
+    var saving by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val currentSaving by rememberUpdatedState(saving)
+    val scope = rememberCoroutineScope()
+    fun persist(useStandard: Boolean) {
+        saving = true
+        error = null
+        val snapshot = strokes.toList()
+        scope.launch {
+            try {
+                if (useStandard) onUseStandard() else {
+                    val bitmap = withContext(Dispatchers.Default) {
+                        renderSumiImage(snapshot, artworkBounds.width.roundToInt(), density)
+                    }
+                    onSave(bitmap)
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { error = "Could not save the Enso. Please try again." }
+            finally { saving = false }
+        }
+    }
+    BackHandler { if (!saving) onClose() }
     Box(Modifier.fillMaxSize().background(Paper).pointerInput(Unit) {
         // Own hit testing even on the margins; touches must not reach the timer underneath.
         awaitEachGesture {
@@ -54,66 +82,80 @@ internal fun EnsoPainter(onClose: () -> Unit) {
         }
     }) {
         WashiBackground(Modifier.matchParentSize())
-        Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween) {
-                Box(Modifier.size(48.dp).clip(CircleShape)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-                        onClick = onClose)
-                    .semantics { contentDescription = "Close painting" }, contentAlignment = Alignment.Center) {
-                    Text("×", color = FadedInk, fontSize = 28.sp)
-                }
-                InkAction("Reset painting", R.drawable.ink_reset, enabled = strokes.isNotEmpty(),
-                    secondary = true) { strokes.clear() }
+        Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Box(Modifier.size(48.dp).clip(CircleShape)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
+                    enabled = !saving, onClick = onClose)
+                .semantics { contentDescription = "Close painting" }, contentAlignment = Alignment.Center) {
+                Text("×", color = FadedInk, fontSize = 28.sp)
             }
-            Canvas(Modifier.weight(1f).fillMaxWidth().padding(12.dp).clipToBounds()
-                .semantics {
-                    contentDescription = "Enso painting canvas"
-                    stateDescription = when (strokes.size) {
-                        0 -> "Empty canvas"
-                        1 -> "1 brush stroke"
-                        else -> "${strokes.size} brush strokes"
-                    }
+            TextButton(onClick = { brushSettingsOpen = true }, enabled = !saving,
+                modifier = Modifier.semantics { contentDescription = "Brush settings" }) { Text("Brush") }
+            InkAction("Reset painting", R.drawable.ink_reset, enabled = strokes.isNotEmpty() && !saving && !drawing,
+                secondary = true) { strokes.clear() }
+        }
+        Canvas(Modifier.offset { IntOffset(artworkBounds.left.roundToInt(), artworkBounds.top.roundToInt()) }
+            .size(with(LocalDensity.current) { artworkBounds.width.toDp() },
+                with(LocalDensity.current) { artworkBounds.height.toDp() }).clipToBounds()
+            .semantics {
+                contentDescription = "Enso painting canvas"
+                stateDescription = when (strokes.size) {
+                    0 -> "Empty canvas"
+                    1 -> "1 brush stroke"
+                    else -> "${strokes.size} brush strokes"
                 }
-                .pointerInput(density) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown()
-                        down.consume()
-                        val stroke = InkStroke(density)
-                        strokes += stroke
-                        stroke.append(down.position, down.uptimeMillis)
-                        stroke.updateShape()
-                        try {
-                            while (true) {
-                                val event = awaitPointerEvent()
-                                val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                                if (change.isConsumed || event.changes.any { it.id != down.id && it.pressed }) break
-                                for (sample in change.historical) stroke.append(sample.position, sample.uptimeMillis)
-                                stroke.append(change.position, change.uptimeMillis)
-                                stroke.updateShape()
-                                change.consume()
-                                if (!change.pressed) break
-                            }
-                        } finally { stroke.finish() }
-                    }
-                }) {
-                // A quiet pencil guide, underneath the ink and independent of the drawn shape.
-                drawCircle(FadedInk.copy(alpha = .15f), radius = size.minDimension * .34f,
-                    style = Stroke(.7.dp.toPx()))
-                for (stroke in strokes) {
-                    val shape = stroke.shape
-                    if (shape.segments == 0) {
-                        shape.dab?.let { drawCircle(Ink.copy(alpha = .88f), it.radius * .4f, it.position) }
-                    } else drawIntoCanvas { canvas ->
-                        canvas.nativeCanvas.drawBitmapMesh(brush, 1, shape.segments,
-                            shape.vertices, 0, null, 0, inkPaint)
-                    }
+            }
+            .pointerInput(density) {
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    down.consume()
+                    if (currentSaving) return@awaitEachGesture
+                    drawing = true
+                    val stroke = SumiStroke(density,
+                        size.width.coerceAtMost(size.height) * ENSO_GUIDE_RADIUS * 2f * PI.toFloat(),
+                        seed = strokes.size + 1, settings = currentSettings)
+                    strokes += stroke
+                    stroke.append(down.position, down.uptimeMillis)
+                    try {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            if (change.isConsumed || event.changes.any { it.id != down.id && it.pressed }) break
+                            for (sample in change.historical) stroke.append(sample.position, sample.uptimeMillis)
+                            stroke.append(change.position, change.uptimeMillis)
+                            change.consume()
+                            if (!change.pressed) break
+                        }
+                    } finally { stroke.finish(); drawing = false }
+                }
+            }) {
+            // Centerline of the original ink ring, in exactly the same screen-space artwork bounds.
+            drawCircle(FadedInk.copy(alpha = .32f), radius = size.minDimension * ENSO_GUIDE_RADIUS,
+                style = Stroke(1.dp.toPx()))
+            for (stroke in strokes) brush.draw(this, stroke)
+        }
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            error?.let { Text(it, color = Ink, fontSize = 13.sp) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                TextButton(onClick = { persist(true) }, enabled = !saving && !drawing,
+                    modifier = Modifier.semantics { contentDescription = "Use standard Enso" }) { Text("Use standard") }
+                TextButton(onClick = { persist(false) }, enabled = !saving && !drawing && strokes.isNotEmpty(),
+                    modifier = Modifier.semantics { contentDescription = "Save and use painted Enso" }) {
+                    Text(if (saving) "Saving…" else "Save & use")
                 }
             }
         }
     }
+    if (brushSettingsOpen) BrushSettingsPanel(settings, onChange = {
+        settings = it
+        store.save(it)
+    }, onClose = { brushSettingsOpen = false })
 }
+
+internal const val ENSO_GUIDE_RADIUS = .38f
 
 /** A small brush silhouette drawn in the same editable canvas language as the experiment. */
 @Composable
@@ -137,131 +179,5 @@ internal fun InkPaintButton(onClick: () -> Unit) {
         }, Ink.copy(alpha = .8f))
         drawLine(Paper.copy(alpha = .5f), Offset(w * .21f, h * .88f), Offset(w * .46f, h * .69f),
             .6.dp.toPx(), cap = StrokeCap.Round)
-    }
-}
-
-/**
- * Unroll the existing timer artwork into a brush ribbon (across the nib × along the stroke).
- * Its real translucent grain and split bristles survive the warp, including the dry trailing end.
- * This small in-memory texture is shared by all strokes; no generated asset or draft is saved.
- */
-private fun unwrapEnsoInk(resources: Resources): Bitmap {
-    val source = BitmapFactory.decodeResource(resources, R.drawable.enso_brush,
-        BitmapFactory.Options().apply { inScaled = false })
-    val sourcePixels = IntArray(source.width * source.height)
-    source.getPixels(sourcePixels, 0, source.width, 0, 0, source.width, source.height)
-    val width = 256
-    val height = 1536
-    val pixels = IntArray(width * height)
-    for (y in 0 until height) {
-        // Start at the loaded brush heel; follow the artwork around to the dry hairs.
-        val angle = Math.toRadians(82.0 + 346.0 * y / (height - 1))
-        val dx = cos(angle).toFloat()
-        val dy = sin(angle).toFloat()
-        for (x in 0 until width) {
-            val radius = source.width * (.23f + .26f * x / (width - 1))
-            val sx = (source.width * .5f + radius * dx).roundToInt().coerceIn(0, source.width - 1)
-            val sy = (source.height * .5f + radius * dy).roundToInt().coerceIn(0, source.height - 1)
-            pixels[y * width + x] = sourcePixels[sy * source.width + sx]
-        }
-    }
-    source.recycle()
-    return Bitmap.createBitmap(pixels, width, height, Bitmap.Config.ARGB_8888)
-}
-
-private data class BrushPoint(val position: Offset, val radius: Float)
-private data class BrushShape(
-    val vertices: FloatArray = FloatArray(0),
-    val segments: Int = 0,
-    val dab: BrushPoint? = null,
-)
-
-/** Rebuild only the active stroke; previously painted strokes keep their cached mesh. */
-private class InkStroke(private val density: Float) {
-    private val points = mutableListOf<BrushPoint>()
-    private var lastTime = 0L
-    private var lastRaw = Offset.Zero
-    var shape by mutableStateOf(BrushShape())
-        private set
-
-    fun append(raw: Offset, time: Long) {
-        val previous = points.lastOrNull()
-        if (previous != null && (raw - lastRaw).getDistance() < density * 1.5f) return
-        val position = previous?.let { it.position + (raw - it.position) * .58f } ?: raw
-        val speed = if (previous == null) 0f else (raw - lastRaw).getDistance() /
-            (time - lastTime).coerceAtLeast(1) / density
-        // The ribbon also includes transparent space around the irregular ink edges.
-        val targetRadius = (32f - speed * 5f).coerceIn(23f, 32f) * density
-        val radius = previous?.let { it.radius * .7f + targetRadius * .3f } ?: targetRadius
-        points += BrushPoint(position, radius)
-        lastRaw = raw
-        lastTime = time
-    }
-
-    fun updateShape() { rebuild(finished = false) }
-
-    fun finish() { rebuild(finished = true) }
-
-    private fun rebuild(finished: Boolean) {
-        if (points.isEmpty()) return
-        if (points.size == 1) {
-            shape = BrushShape(dab = points.first())
-            return
-        }
-        // Quadratic midpoint interpolation rounds corners without forcing a perfect circle.
-        val smooth = mutableListOf(points.first())
-        for (i in 1 until points.size) {
-            val control = points[i - 1]
-            val start = smooth.last()
-            val end = if (i == points.lastIndex) points[i] else BrushPoint(
-                (points[i - 1].position + points[i].position) * .5f,
-                (points[i - 1].radius + points[i].radius) * .5f)
-            val divisions = ((end.position - start.position).getDistance() / (2f * density)).toInt().coerceIn(2, 32)
-            for (step in 1..divisions) {
-                val t = step.toFloat() / divisions
-                val u = 1 - t
-                smooth += BrushPoint(start.position * (u * u) + control.position * (2 * u * t) + end.position * (t * t),
-                    start.radius * u + end.radius * t)
-            }
-        }
-        val distances = FloatArray(smooth.size)
-        for (i in 1 until smooth.size) distances[i] = distances[i - 1] +
-            (smooth[i].position - smooth[i - 1].position).getDistance()
-        val total = distances.last()
-        if (total < density) {
-            shape = BrushShape(dab = points.first())
-            return
-        }
-        // Equal arc-length samples keep texture detail even when input events arrive irregularly.
-        val segments = (total / (2f * density)).roundToInt().coerceIn(2, 2048)
-        val samples = ArrayList<BrushPoint>(segments + 1)
-        var cursor = 1
-        for (i in 0..segments) {
-            val distance = total * i / segments
-            while (cursor < smooth.lastIndex && distances[cursor] < distance) cursor++
-            val before = smooth[cursor - 1]
-            val after = smooth[cursor]
-            val fraction = ((distance - distances[cursor - 1]) /
-                (distances[cursor] - distances[cursor - 1]).coerceAtLeast(.001f)).coerceIn(0f, 1f)
-            samples += BrushPoint(before.position + (after.position - before.position) * fraction,
-                before.radius + (after.radius - before.radius) * fraction)
-        }
-        val vertices = FloatArray((segments + 1) * 4)
-        for (i in samples.indices) {
-            val tangent = samples[min(i + 1, segments)].position - samples[max(i - 1, 0)].position
-            val length = tangent.getDistance().coerceAtLeast(.001f)
-            val normal = Offset(-tangent.y / length, tangent.x / length)
-            val distance = total * i / segments
-            val head = (.3f + distance / (14f * density)).coerceAtMost(1f)
-            val tail = if (finished) (.12f + (total - distance) / (36f * density)).coerceAtMost(1f) else 1f
-            val radius = samples[i].radius * min(head, tail)
-            val inner = samples[i].position + normal * radius
-            val outer = samples[i].position - normal * radius
-            vertices[i * 4] = inner.x
-            vertices[i * 4 + 1] = inner.y
-            vertices[i * 4 + 2] = outer.x
-            vertices[i * 4 + 3] = outer.y
-        }
-        shape = BrushShape(vertices, segments)
     }
 }

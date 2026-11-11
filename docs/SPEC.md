@@ -1521,10 +1521,26 @@ The final implementation summary must not claim functionality was tested if it w
 
 On the experiment branch, a discreet brush icon next to Settings opens a full-screen washi drawing area.
 Draw freehand with a single finger. Lightly smooth the input while preserving the drawn shape;
-use variable width and tapered ends, with the actual ink grain and dry bristles of the timer artwork
-warped along the smoothed stroke. A very faint circular guide sits beneath the ink; it does not
-snap or constrain the drawing.
+use overlapping textured nib impressions and individually damped bristles. Speed gently controls
+width; ink depletes with travelled distance relative to the guide circumference, producing a dense
+start and dry separated hairs later. Deposited marks stay fixed as the stroke grows; lifting adds
+a short tapered finish. The renderer is local Canvas code with no additional Ink dependency. A visible but subdued circular guide sits beneath the ink; it does not
+snap or constrain the drawing. The square canvas matches the timer artwork's screen position and size;
+the guide traces the centerline of the standard ink ring.
 Allow multiple strokes. X and Android Back close the drawing area; Reset clears its strokes.
-The draft exists only while the drawing area is open. Do not save, export or apply it to the timer.
+The draft exists only while the drawing area is open until Save & use is tapped. That button renders
+only the ink to a transparent PNG, atomically replacing the one private saved Enso image, and applies
+it to the timer immediately. Persist it across app restarts; never ask for a filename or storage access.
+Use standard removes the custom image and restores the bundled artwork. Reset clears only the draft;
+X and Back discard uncommitted drawing. Custom artwork keeps its painted orientation on application;
+subsequent minute-setting gestures rotate it in the same way as the standard artwork.
 Opening, drawing and clearing must not modify timer settings, selected duration or repetitions.
 The timer screen keeps its state under the drawing area; an existing session continues normally.
+
+The painter's Brush panel exposes width, ink flow, ink reach (relative to the guide circumference),
+bristle count, bristle drag, speed influence and smoothing. Parameters apply to new strokes only;
+existing marks keep their appearance. Retain these experimental parameters locally across closes
+and restarts, with Defaults and Copy values controls for tuning feedback.
+Defaults: width 65 dp, flow 180%, ink reach 0.70 circles, 108 bristles, drag 0%,
+speed influence 200%, smoothing 5.0 dp. Migrate the former unchanged default preset; retain custom values.
+Show the build's version name discreetly beside the Settings heading, without a separate footer row.

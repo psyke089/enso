@@ -6,10 +6,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import app.enso.meditation.R
@@ -51,14 +53,14 @@ private const val ENSO_ROTATION_DEGREES = 154f
 
 /** The hand-painted Enso brush circle. The timer is laid over its empty center. */
 @Composable
-fun EnsoArtwork(modifier: Modifier = Modifier, paused: Boolean = false, rotationDegrees: Float = 0f) {
-    Image(
-        painter = painterResource(R.drawable.enso_brush),
-        contentDescription = null,
-        contentScale = ContentScale.Fit,
-        alpha = if (paused) 0.55f else 0.92f,
-        modifier = modifier.rotate(ENSO_ROTATION_DEGREES + rotationDegrees),
-    )
+fun EnsoArtwork(modifier: Modifier = Modifier, paused: Boolean = false, rotationDegrees: Float = 0f,
+    customImage: ImageBitmap? = null) {
+    val alpha = if (paused) 0.55f else 0.92f
+    if (customImage != null) Image(bitmap = customImage, contentDescription = null,
+        contentScale = ContentScale.Fit, alpha = alpha, modifier = modifier.testTag("Custom Enso artwork").rotate(rotationDegrees))
+    else Image(painter = painterResource(R.drawable.enso_brush), contentDescription = null,
+        contentScale = ContentScale.Fit, alpha = alpha,
+        modifier = modifier.testTag("Standard Enso artwork").rotate(ENSO_ROTATION_DEGREES + rotationDegrees))
 }
 
 /** A faint ink-wash landscape anchored near the bottom edge. */

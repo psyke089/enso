@@ -291,6 +291,135 @@ class EnsoSmokeTest {
             awaitState { it.continuous == original.continuous && it.settings == original.settings }
         }
     }
+    @Test fun sumiBrushKeepsDepositsFixedAndUsesUpItsInk() {
+        val stroke = app.enso.meditation.ui.SumiStroke(1f, 500f, seed = 4)
+        stroke.append(Offset.Zero, 0)
+        for (i in 1..20) stroke.append(Offset(i * 5f, 0f), i * 16L)
+        val deposited = stroke.dabs.toList()
+        val initialInk = deposited.drop(5).map { it.opacity }.average()
+        for (i in 21..100) stroke.append(Offset(i * 5f, 0f), i * 16L)
+        assertEquals("Extending a stroke must not move or restyle earlier deposits",
+            deposited, stroke.dabs.take(deposited.size))
+        assertTrue("The brush must leave less wet ink towards the end",
+            stroke.dabs.takeLast(20).map { it.opacity }.average() < initialInk * .25)
+        val beforeLift = stroke.dabs.toList()
+        stroke.finish()
+        assertEquals(beforeLift, stroke.dabs.take(beforeLift.size))
+        assertTrue(stroke.dabs.last().width < beforeLift.last().width * .2f)
+        val adjusted = app.enso.meditation.ui.SumiStroke(1f, 500f, seed = 4,
+            settings = app.enso.meditation.ui.BrushSettings(width = 70f, inkReach = 2f, drag = 0f, smoothing = 0f))
+        adjusted.append(Offset.Zero, 0)
+        for (i in 1..100) adjusted.append(Offset(i * 5f, 0f), i * 16L)
+        assertTrue("Width control must change the deposited marks", adjusted.dabs[40].width > stroke.dabs[40].width)
+        assertTrue("More ink reach must keep later marks wetter", adjusted.dabs.takeLast(20).map { it.opacity }.average() >
+            beforeLift.takeLast(20).map { it.opacity }.average())
+        val finished = stroke.dabs.toList()
+        stroke.finish()
+        stroke.append(Offset(700f, 0f), 2000)
+        assertEquals("A completed stroke must remain immutable", finished, stroke.dabs)
+    }
+
+    @Test fun brushControlsPersistAndCanBeCopiedWithoutSavingTheDrawing() {
+        awaitState { it.ready }
+        val store = app.enso.meditation.ui.BrushSettingsStore(compose.activity)
+        val original = store.load()
+        try {
+            compose.onNodeWithContentDescription("Paint an Enso").performClick()
+            compose.onNodeWithContentDescription("Brush settings").performClick()
+            compose.onNodeWithContentDescription("Brush Width").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) {
+                assertTrue(it(70f))
+            }
+            compose.onNodeWithContentDescription("Brush Ink reach").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) {
+                assertTrue(it(2f))
+            }
+            compose.runOnIdle {
+                assertEquals(70f, store.load().width, .001f)
+                assertEquals(2f, store.load().inkReach, .001f)
+            }
+            compose.onNodeWithContentDescription("Copy brush values").performScrollTo().performClick()
+            compose.runOnIdle {
+                val clipboard = compose.activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                assertEquals(store.load().description(), clipboard.primaryClip!!.getItemAt(0).text.toString())
+            }
+            compose.onNodeWithContentDescription("Close brush settings").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Enso painting canvas").assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Empty canvas"))
+            compose.onNodeWithContentDescription("Close painting").performClick()
+            compose.activityRule.scenario.recreate()
+            awaitState { it.ready }
+            compose.onNodeWithContentDescription("Paint an Enso").performClick()
+            compose.onNodeWithContentDescription("Brush settings").performClick()
+            compose.onNodeWithContentDescription("Brush Width").assert(SemanticsMatcher("Retained width") {
+                it.config[SemanticsProperties.ProgressBarRangeInfo].current == 70f
+            })
+            compose.onNodeWithText("Defaults").performScrollTo().performClick()
+            compose.runOnIdle { assertEquals(app.enso.meditation.ui.BrushSettings(), store.load()) }
+            compose.onNodeWithContentDescription("Close brush settings").performScrollTo().performClick()
+            compose.onNodeWithContentDescription("Close painting").performClick()
+            compose.onNodeWithContentDescription("Settings").performClick()
+            compose.onNodeWithContentDescription("App version ${BuildConfig.VERSION_NAME}").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithContentDescription("Close settings").performScrollTo().performClick()
+        } finally { store.save(original) }
+    }
+
+    @Test fun paintedEnsoMatchesTimerBoundsAndCanReplaceAndRestoreArtwork() {
+        awaitState { it.ready }
+        val imageStore = app.enso.meditation.ui.EnsoImageStore(compose.activity)
+        val originalImage = imageStore.load()
+        val original = state
+        try {
+            val bounds = compose.onNodeWithContentDescription("Timer circle").fetchSemanticsNode().boundsInRoot
+            compose.onNodeWithContentDescription("Paint an Enso").performClick()
+            val canvas = compose.onNodeWithContentDescription("Enso painting canvas")
+            val paintBounds = canvas.fetchSemanticsNode().boundsInRoot
+            assertEquals(bounds.left, paintBounds.left, 1f)
+            assertEquals(bounds.top, paintBounds.top, 1f)
+            assertEquals(bounds.width, paintBounds.width, 1f)
+            assertEquals(bounds.height, paintBounds.height, 1f)
+            compose.onNodeWithContentDescription("Save and use painted Enso").assertIsNotEnabled()
+            canvas.performTouchInput {
+                val radius = width * app.enso.meditation.ui.ENSO_GUIDE_RADIUS
+                fun point(degrees: Int): Offset {
+                    val angle = Math.toRadians(degrees.toDouble())
+                    return center + Offset(cos(angle).toFloat() * radius, sin(angle).toFloat() * radius)
+                }
+                down(point(-120))
+                for (degrees in -115..200 step 5) moveTo(point(degrees), 16)
+                up()
+            }
+            compose.onNodeWithContentDescription("Save and use painted Enso").performClick()
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty() }
+            val first = imageStore.load()!!
+            assertEquals(bounds.width.toInt(), first.width)
+            assertEquals(first.width, first.height)
+            assertEquals("Paper and controls must not be saved", 0, android.graphics.Color.alpha(first.getPixel(0, 0)))
+            assertEquals("The center must remain transparent", 0,
+                android.graphics.Color.alpha(first.getPixel(first.width / 2, first.height / 2)))
+            assertTrue("The saved image must contain ink", (0 until first.width).any { x ->
+                android.graphics.Color.alpha(first.getPixel(x, first.height / 2)) > 0
+            })
+            compose.activityRule.scenario.recreate()
+            awaitState { it.ready }
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty() }
+            assertTrue(first.sameAs(imageStore.load()))
+            compose.onNodeWithContentDescription("Paint an Enso").performClick()
+            canvas.performTouchInput { click(center) }
+            compose.onNodeWithContentDescription("Save and use painted Enso").performClick()
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty() }
+            assertFalse("Saving again must replace the single image", first.sameAs(imageStore.load()))
+            compose.onNodeWithContentDescription("Paint an Enso").performClick()
+            compose.onNodeWithContentDescription("Use standard Enso").performClick()
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("Standard Enso artwork").fetchSemanticsNodes().isNotEmpty() }
+            assertNull(imageStore.load())
+            assertEquals(original.selectedMs, state.selectedMs)
+            assertEquals(original.settings, state.settings)
+            assertEquals(original.repeatCount, state.repeatCount)
+            assertEquals(original.continuous, state.continuous)
+        } finally {
+            if (originalImage != null) imageStore.save(originalImage) else imageStore.useStandard()
+        }
+    }
+
     @Test fun paintingIsTemporaryAndResetClearsOnlyTheDrawing() {
         awaitState { it.ready }
         val original = state

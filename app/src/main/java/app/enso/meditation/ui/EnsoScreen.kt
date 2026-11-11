@@ -37,6 +37,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.positionInRoot
+import androidx.compose.ui.unit.toSize
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -52,9 +59,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.enso.meditation.*
+import app.enso.meditation.BuildConfig
 import app.enso.meditation.R
 import app.enso.meditation.ui.theme.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -70,6 +80,13 @@ fun EnsoScreen(
 ) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var paintingOpen by remember { mutableStateOf(false) }
+    var circleBounds by remember { mutableStateOf<Rect?>(null) }
+    val context = LocalContext.current
+    val imageStore = remember(context) { EnsoImageStore(context) }
+    var customEnso by remember { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(imageStore) {
+        customEnso = withContext(Dispatchers.IO) { imageStore.load()?.asImageBitmap() }
+    }
     Box(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().then(if (paintingOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
             WashiBackground(Modifier.matchParentSize())
@@ -84,12 +101,13 @@ fun EnsoScreen(
                     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically) {
-                        InkPaintButton { paintingOpen = true }
+                        InkPaintButton { if (circleBounds != null) paintingOpen = true }
                         Spacer(Modifier.width(8.dp))
                         InkSettingsButton { settingsOpen = true }
                     }
                     Spacer(Modifier.height(topSpace))
-                    TimerCircle(state, adjustDuration, adjustRepetitions, Modifier.size(circleSize))
+                    TimerCircle(state, adjustDuration, adjustRepetitions, customEnso,
+                        Modifier.size(circleSize).onGloballyPositioned { circleBounds = Rect(it.positionInRoot(), it.size.toSize()) })
                     RepetitionDisplay(state)
                     Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
                     InkAction(
@@ -133,7 +151,17 @@ fun EnsoScreen(
                 }
             }
         }
-        if (paintingOpen) EnsoPainter { paintingOpen = false }
+        if (paintingOpen) circleBounds?.let { bounds ->
+            EnsoPainter(bounds, onSave = { bitmap ->
+                withContext(Dispatchers.IO) { imageStore.save(bitmap) }
+                customEnso = bitmap.asImageBitmap()
+                paintingOpen = false
+            }, onUseStandard = {
+                withContext(Dispatchers.IO) { imageStore.useStandard() }
+                customEnso = null
+                paintingOpen = false
+            }, onClose = { paintingOpen = false })
+        }
     }
 }
 
@@ -273,11 +301,11 @@ private fun Saying(text: String, visible: Boolean) {
 
 @Composable
 private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit,
-    adjustRepetitions: (Int) -> Unit, modifier: Modifier) {
-    var brushRotation by rememberSaveable { mutableFloatStateOf(0f) }
+    adjustRepetitions: (Int) -> Unit, customEnso: ImageBitmap?, modifier: Modifier) {
+    var brushRotation by rememberSaveable(customEnso) { mutableFloatStateOf(0f) }
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         EnsoArtwork(Modifier.fillMaxSize(), paused = state.phase == TimerPhase.Paused,
-            rotationDegrees = brushRotation)
+            rotationDegrees = brushRotation, customImage = customEnso)
         val fontScale = LocalDensity.current.fontScale
         val textSize = maxWidth.value * (if (state.remainingMs > 3_599_000) .108f else .157f) /
             (fontScale / 1.25f).coerceAtLeast(1f)
@@ -417,6 +445,9 @@ private fun SettingsPanel(
             verticalAlignment = Alignment.CenterVertically) {
             Text("Settings", color = FadedInk.copy(alpha = .65f), fontFamily = FontFamily.Serif,
                 fontSize = 14.sp, letterSpacing = .3.sp, modifier = Modifier.weight(1f))
+            Text(BuildConfig.VERSION_NAME, color = FadedInk.copy(alpha = .55f), fontSize = 10.sp,
+                modifier = Modifier.padding(end = 6.dp)
+                    .semantics { contentDescription = "App version ${BuildConfig.VERSION_NAME}" })
             Box(Modifier.size(44.dp).offset(x = 7.dp).clip(CircleShape)
                 .clickable(interactionSource = remember { MutableInteractionSource() },
                     indication = null, onClick = onDone)
