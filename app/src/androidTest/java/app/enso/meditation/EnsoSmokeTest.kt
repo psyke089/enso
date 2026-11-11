@@ -1,6 +1,7 @@
 package app.enso.meditation
 
 import android.view.WindowManager
+import androidx.activity.compose.setContent
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -291,6 +292,73 @@ class EnsoSmokeTest {
             awaitState { it.continuous == original.continuous && it.settings == original.settings }
         }
     }
+    @Test fun lockScreenNotificationShowsOneCountdownAndOffersWorkingControls() {
+        awaitState { it.ready }
+        val original = state
+        val manager = compose.activity.getSystemService(android.app.NotificationManager::class.java)
+        fun active() = manager.activeNotifications.firstOrNull { it.id == 1 }?.notification
+        try {
+            controller.changeSettings { it.copy(startGong = false, endGong = false, repeatGong = false,
+                vibration = false, keepScreenAwake = false) }
+            awaitState { !it.settings.startGong && !it.settings.endGong && !it.settings.repeatGong }
+            compose.onNodeWithContentDescription("Start").performClick()
+            awaitState { it.phase == TimerPhase.Running }
+            compose.waitUntil(5_000) { active()?.actions?.firstOrNull()?.title?.toString() == "Pause" }
+            val notification = active()!!
+            assertEquals(android.app.Notification.VISIBILITY_PUBLIC, notification.visibility)
+            assertEquals(android.app.Notification.CATEGORY_ALARM, notification.category)
+            assertFalse(notification.extras.getBoolean(android.app.Notification.EXTRA_SHOW_CHRONOMETER))
+            assertFalse(notification.extras.getBoolean(android.app.Notification.EXTRA_SHOW_WHEN))
+            assertTrue(notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString().contains(":"))
+            assertEquals("Pause", notification.actions.first().title.toString())
+            if (android.os.Build.VERSION.SDK_INT >= 26) {
+                val channel = manager.getNotificationChannel(notification.channelId)
+                assertEquals(android.app.NotificationManager.IMPORTANCE_DEFAULT, channel.importance)
+                assertNull(channel.sound)
+                assertFalse(channel.shouldVibrate())
+            }
+            notification.actions.first().actionIntent.send()
+            awaitState { it.phase == TimerPhase.Paused }
+            compose.waitUntil(5_000) { active()?.actions?.firstOrNull()?.title?.toString() == "Resume" }
+            assertTrue(active()!!.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString().contains("Paused"))
+            assertEquals("Resume", active()!!.actions.first().title.toString())
+            active()!!.actions.first().actionIntent.send()
+            awaitState { it.phase == TimerPhase.Running }
+            compose.waitUntil(5_000) { active()?.actions?.firstOrNull()?.title?.toString() == "Pause" }
+            active()!!.actions[1].actionIntent.send()
+            awaitState { it.phase == TimerPhase.Idle }
+            compose.waitUntil(5_000) { active() == null }
+        } finally {
+            MeditationService.send(compose.activity, SessionAction.Stop)
+            awaitState { it.phase == TimerPhase.Idle }
+            controller.changeSettings { original.settings }
+            awaitState { it.settings == original.settings }
+        }
+    }
+
+    @Test fun startupEnsoSharesTheTimerArtworkPositionAndSize() {
+        awaitState { it.ready }
+        val original = state
+        val bounds = compose.onNodeWithContentDescription("Timer circle").fetchSemanticsNode().boundsInRoot
+        try {
+            compose.runOnUiThread {
+                compose.activity.setContent {
+                    app.enso.meditation.ui.theme.EnsoTheme {
+                        app.enso.meditation.ui.EnsoScreen(original.copy(ready = false), {}, {}, {}, {}, {})
+                    }
+                }
+            }
+            val splash = compose.onNodeWithTag("Enso splash ring")
+            splash.assertIsDisplayed()
+            val splashBounds = splash.fetchSemanticsNode().boundsInRoot
+            assertEquals(bounds.left, splashBounds.left, 1f)
+            assertEquals(bounds.top, splashBounds.top, 1f)
+            assertEquals(bounds.width, splashBounds.width, 1f)
+            assertEquals(bounds.height, splashBounds.height, 1f)
+            compose.onNodeWithContentDescription("Start").assertDoesNotExist()
+        } finally { compose.activityRule.scenario.recreate() }
+    }
+
     @Test fun sumiBrushKeepsDepositsFixedAndUsesUpItsInk() {
         val stroke = app.enso.meditation.ui.SumiStroke(1f, 500f, seed = 4)
         stroke.append(Offset.Zero, 0)
@@ -326,6 +394,8 @@ class EnsoSmokeTest {
         try {
             compose.onNodeWithContentDescription("Paint an Enso").performClick()
             compose.onNodeWithContentDescription("Brush settings").performClick()
+            compose.onNodeWithText("Brush").assertDoesNotExist()
+            compose.onNodeWithText("Changes apply to your next stroke.").assertDoesNotExist()
             compose.onNodeWithContentDescription("Brush Width").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) {
                 assertTrue(it(70f))
             }

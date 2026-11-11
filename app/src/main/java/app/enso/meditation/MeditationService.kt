@@ -26,9 +26,9 @@ class MeditationService : Service() {
         super.onCreate()
         notifications = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
-            notifications.createNotificationChannel(NotificationChannel(CHANNEL, "Meditation",
-                NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Quiet controls for an active meditation"
+            notifications.createNotificationChannel(NotificationChannel(CHANNEL, "Meditation timer",
+                NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = "Remaining meditation time and quiet controls on the lock screen"
                 setSound(null, null)
                 enableVibration(false)
                 setShowBadge(false)
@@ -89,7 +89,8 @@ class MeditationService : Service() {
                     else if (state.repeatCount > 1) " · ${state.completedIntervals + 1} / ${state.repeatCount}" else "")
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
             .setSilent(true).setShowWhen(false).setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .setCategory(NotificationCompat.CATEGORY_ALARM)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
         if (state.phase != TimerPhase.Idle) {
             val action = if (state.phase == TimerPhase.Paused) SessionAction.Resume else SessionAction.Pause
             builder.addAction(0, action.name, pendingAction(action))
@@ -111,7 +112,9 @@ class MeditationService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
-        private const val CHANNEL = "meditation"
+        // The legacy low-importance service channel can be hidden on lock screens. A dedicated
+        // timer channel is visible by default, with no sound, vibration, badge or heads-up alert.
+        private const val CHANNEL = "meditation_timer"
         private const val NOTIFICATION = 1
         fun send(context: Context, action: SessionAction) {
             ContextCompat.startForegroundService(context,

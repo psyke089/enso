@@ -1544,3 +1544,21 @@ and restarts, with Defaults and Copy values controls for tuning feedback.
 Defaults: width 65 dp, flow 180%, ink reach 0.70 circles, 108 bristles, drag 0%,
 speed influence 200%, smoothing 5.0 dp. Migrate the former unchanged default preset; retain custom values.
 Show the build's version name discreetly beside the Settings heading, without a separate footer row.
+
+The painter uses ink icons for close, brush settings, reset, restore standard and save/apply.
+The brush settings drawer omits its title and introductory text; close is an ink X, while Defaults
+and Copy values remain text actions. The OS launch window shows only the paper color (Android's
+system icon is fixed at screen center). Startup inside the app draws the chosen Enso at the timer's
+actual measured artwork bounds. Keep the ring visible for 600 ms after its first drawable frame,
+then fade out the overlay once preferences and artwork are loaded. Do not move or resize the Enso
+during this transition.
+
+# Lock-screen timer display
+
+An active session posts a public, ongoing timer notification with remaining interval time,
+repetition information and Pause/Resume and Stop actions. Display the countdown only in the content
+line, updated by the service; hide Android's header chronometer and timestamp to avoid duplication.
+Pausing freezes the displayed remaining time. Stop or final
+completion removes the notification. Use a dedicated default-importance meditation timer channel,
+public lock-screen visibility, no notification sound or vibration, no badge or heads-up alert.
+Android notification permission and the user's system lock-screen notification preferences apply.

@@ -2,6 +2,8 @@ package app.enso.meditation.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.Animatable
@@ -36,6 +38,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.ImageBitmap
@@ -63,6 +66,7 @@ import app.enso.meditation.BuildConfig
 import app.enso.meditation.R
 import app.enso.meditation.ui.theme.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
@@ -84,11 +88,27 @@ fun EnsoScreen(
     val context = LocalContext.current
     val imageStore = remember(context) { EnsoImageStore(context) }
     var customEnso by remember { mutableStateOf<ImageBitmap?>(null) }
+    var artworkLoaded by remember { mutableStateOf(false) }
+    val startup = remember { MutableTransitionState(true) }
+    var splashShown by remember { mutableStateOf(false) }
+    LaunchedEffect(circleBounds != null && artworkLoaded) {
+        if (circleBounds != null && artworkLoaded) {
+            // Begin the brief display only once an Enso can actually be drawn.
+            withFrameNanos { }
+            delay(600)
+            splashShown = true
+        }
+    }
     LaunchedEffect(imageStore) {
         customEnso = withContext(Dispatchers.IO) { imageStore.load()?.asImageBitmap() }
+        artworkLoaded = true
     }
+    val loading = !state.ready || !artworkLoaded
+    startup.targetState = loading || circleBounds == null || !splashShown
     Box(Modifier.fillMaxSize()) {
-        Box(Modifier.fillMaxSize().then(if (paintingOpen) Modifier.clearAndSetSemantics {} else Modifier)) {
+        WashiBackground(Modifier.matchParentSize())
+        Box(Modifier.fillMaxSize().alpha(if (loading) 0f else 1f)
+            .then(if (paintingOpen || loading) Modifier.clearAndSetSemantics {} else Modifier)) {
             WashiBackground(Modifier.matchParentSize())
             SumiLandscape(Modifier.align(Alignment.BottomCenter).fillMaxWidth())
             BoxWithConstraints(Modifier.fillMaxSize().safeDrawingPadding()) {
@@ -148,6 +168,28 @@ fun EnsoScreen(
                         onDone = { settingsOpen = false },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
+                }
+            }
+        }
+        // The startup Enso uses the actual laid-out timer bounds, including system insets.
+        // Only the surrounding UI fades in; the ring never changes its position or scale.
+        AnimatedVisibility(visibleState = startup, enter = EnterTransition.None,
+            exit = fadeOut(tween(180))) {
+            Box(Modifier.fillMaxSize().pointerInput(Unit) {
+                awaitEachGesture {
+                    awaitFirstDown()
+                    do { val event = awaitPointerEvent() } while (event.changes.any { it.pressed })
+                }
+            }) {
+                WashiBackground(Modifier.matchParentSize())
+                circleBounds?.let { bounds ->
+                    Box(Modifier.offset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
+                        .size(with(LocalDensity.current) { bounds.width.toDp() },
+                            with(LocalDensity.current) { bounds.height.toDp() })
+                        .clearAndSetSemantics { testTag = "Enso splash ring" }) {
+                        EnsoArtwork(Modifier.fillMaxSize(), customImage = customEnso,
+                            paused = state.phase == TimerPhase.Paused)
+                    }
                 }
             }
         }

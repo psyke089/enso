@@ -46,3 +46,10 @@ Asset: `app/src/main/res/drawable-nodpi/ink_infinity.png`
 Generated with the built-in `image_gen` tool using `ink_reset.png` as a style reference only. The original RGBA image is copied unchanged, preserving transparency. Displayed at 48 × 32 dp for a larger, quieter replacement of the font glyph.
 
 Use case: stylized-concept. Asset type: single production Android meditation timer icon. Reference image is STYLE REFERENCE ONLY: match its warm near-black charcoal sumi ink, dry brush fibers, softly uneven edges, subtle ink texture and restrained Japanese calligraphy. Subject: a single horizontally elongated infinity symbol, two graceful clearly open loops meeting at the center, painted in one flowing calligraphy brush gesture. Bold simple familiar infinity silhouette legible at 40dp wide. Composition: centered, symbol occupies about 82 percent of image width and 40 percent of image height; generous transparent margins, balanced loops with subtle natural asymmetry. True transparent background with alpha, including both loop interiors. No paper rectangle, no checkerboard, no shadows, no border, no letters, no other symbols or decorations. This is one standalone infinity icon only.
+
+## Painter controls (2026-11-11)
+
+Close, brush, apply/checkmark and restore-standard controls are code-native calligraphic icons in
+`InkPainterIcon.kt`. The existing SumiBrush deposits textured strokes into a cached transparent
+128px image for each symbol; these are not generated image assets or an external icon font.
+Reset continues to use `ink_reset.png`. Spoken action labels and 48dp touch targets are retained.

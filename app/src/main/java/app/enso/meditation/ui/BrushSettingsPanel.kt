@@ -32,15 +32,9 @@ internal fun BrushSettingsPanel(settings: BrushSettings, onChange: (BrushSetting
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
             .padding(horizontal = 28.dp).padding(bottom = 20.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Brush", fontFamily = FontFamily.Serif, color = Ink, fontSize = 22.sp,
-                    modifier = Modifier.weight(1f))
-                TextButton(onClick = onClose, modifier = Modifier.semantics { contentDescription = "Close brush settings" }) {
-                    Text("Done")
-                }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                InkPainterIcon(PainterSymbol.Close, "Close brush settings", onClick = onClose)
             }
-            Text("Changes apply to your next stroke.", color = FadedInk, fontSize = 13.sp,
-                modifier = Modifier.padding(bottom = 16.dp))
             fun change(next: BrushSettings) { copied = false; onChange(next.normalized()) }
             BrushSlider("Width", "${settings.width.roundToInt()} dp", "Maximum width of the brush",
                 settings.width, 16f..80f, 63) { change(settings.copy(width = it.roundToInt().toFloat())) }

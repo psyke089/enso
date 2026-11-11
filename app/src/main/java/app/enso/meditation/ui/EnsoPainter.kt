@@ -11,7 +11,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -85,14 +84,8 @@ internal fun EnsoPainter(artworkBounds: Rect, onSave: suspend (Bitmap) -> Unit,
         Row(Modifier.fillMaxWidth().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
-            Box(Modifier.size(48.dp).clip(CircleShape)
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
-                    enabled = !saving, onClick = onClose)
-                .semantics { contentDescription = "Close painting" }, contentAlignment = Alignment.Center) {
-                Text("×", color = FadedInk, fontSize = 28.sp)
-            }
-            TextButton(onClick = { brushSettingsOpen = true }, enabled = !saving,
-                modifier = Modifier.semantics { contentDescription = "Brush settings" }) { Text("Brush") }
+            InkPainterIcon(PainterSymbol.Close, "Close painting", enabled = !saving, onClick = onClose)
+            InkPainterIcon(PainterSymbol.Brush, "Brush settings", enabled = !saving) { brushSettingsOpen = true }
             InkAction("Reset painting", R.drawable.ink_reset, enabled = strokes.isNotEmpty() && !saving && !drawing,
                 secondary = true) { strokes.clear() }
         }
@@ -140,12 +133,9 @@ internal fun EnsoPainter(artworkBounds: Rect, onSave: suspend (Bitmap) -> Unit,
             horizontalAlignment = Alignment.CenterHorizontally) {
             error?.let { Text(it, color = Ink, fontSize = 13.sp) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { persist(true) }, enabled = !saving && !drawing,
-                    modifier = Modifier.semantics { contentDescription = "Use standard Enso" }) { Text("Use standard") }
-                TextButton(onClick = { persist(false) }, enabled = !saving && !drawing && strokes.isNotEmpty(),
-                    modifier = Modifier.semantics { contentDescription = "Save and use painted Enso" }) {
-                    Text(if (saving) "Saving…" else "Save & use")
-                }
+                InkPainterIcon(PainterSymbol.Standard, "Use standard Enso", enabled = !saving && !drawing) { persist(true) }
+                InkPainterIcon(PainterSymbol.Apply, "Save and use painted Enso",
+                    enabled = !saving && !drawing && strokes.isNotEmpty()) { persist(false) }
             }
         }
     }
