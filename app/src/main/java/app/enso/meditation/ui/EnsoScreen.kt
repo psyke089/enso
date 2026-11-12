@@ -90,6 +90,7 @@ fun EnsoScreen(
     animateLaunch: Boolean = false,
     splashReleased: Boolean = true,
     splashBounds: Rect? = null,
+    splashIcon: ImageBitmap? = null,
     action: (SessionAction) -> Unit,
 ) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
@@ -307,11 +308,12 @@ fun EnsoScreen(
                     translationX = initialCenter.x + (bounds.center.x - initialCenter.x) * progress - finalSide / 2f
                     translationY = initialCenter.y + (bounds.center.y - initialCenter.y) * progress - finalSide / 2f
                 }) {
-                Image(painterResource(R.drawable.native_splash_enso), null,
-                    Modifier.fillMaxSize().graphicsLayer {
+                val splashModifier = Modifier.fillMaxSize().graphicsLayer {
                         alpha = 1f - launchFraction(launchMotion.value,
                             if (launchToPainter) .12f else .1f, if (launchToPainter) .85f else .82f)
-                    })
+                    }
+                if (splashIcon != null) Image(splashIcon, null, splashModifier)
+                else Image(painterResource(R.drawable.native_splash_enso), null, splashModifier)
                 if (!launchToPainter) Box(Modifier.fillMaxSize().graphicsLayer {
                     alpha = launchFraction(launchMotion.value, .1f, .82f)
                 }) {

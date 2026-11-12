@@ -12,6 +12,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -23,6 +25,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val controller get() = (application as EnsoApplication).controller
+    private var splashIcon by mutableStateOf<ImageBitmap?>(null)
     private var splashBounds by mutableStateOf<androidx.compose.ui.geometry.Rect?>(null)
     private var splashReleased by mutableStateOf(Build.VERSION.SDK_INT < 31)
     private var notificationRequested = false
@@ -43,6 +46,13 @@ class MainActivity : ComponentActivity() {
                     val top = (iconPosition[1] - rootPosition[1]).toFloat()
                     splashBounds = androidx.compose.ui.geometry.Rect(left, top,
                         left + icon.width, top + icon.height)
+                    // Android normalizes the drawable inside this view. Reusing its rendered
+                    // pixels preserves that scale; drawing the padded PNG again shrinks the ink.
+                    val bitmap = android.graphics.Bitmap.createBitmap(icon.width, icon.height,
+                        android.graphics.Bitmap.Config.ARGB_8888)
+                    icon.draw(android.graphics.Canvas(bitmap))
+                    bitmap.prepareToDraw()
+                    splashIcon = bitmap.asImageBitmap()
                 }
                 // Remove on the next frame, after Compose receives the native icon bounds.
                 splashReleased = true
@@ -74,7 +84,7 @@ class MainActivity : ComponentActivity() {
                 EnsoScreen(state, controller::adjustDuration, controller::adjustRepetitions,
                     controller::changeSettings,
                     controller::previewGong, animateLaunch = savedInstanceState == null,
-                    splashReleased = splashReleased, splashBounds = splashBounds) { action ->
+                    splashReleased = splashReleased, splashBounds = splashBounds, splashIcon = splashIcon) { action ->
                     MeditationService.send(this, action)
                     if (action == SessionAction.Start) requestNotifications()
                 }
