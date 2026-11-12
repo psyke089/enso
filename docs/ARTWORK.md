@@ -85,3 +85,11 @@ orientation. `enso_icon.xml` fits its transparent foreground into the adaptive i
 region; both the regular and themed/monochrome adaptive icons use this silhouette over the warm
 paper background. Android 7 uses the same PNG in a paper-backed layer list. No new artwork was
 generated, and the splash asset itself is unchanged.
+
+## Drawing practice paper (2026-11-12)
+
+`DrawingPaper.kt` layers a light washi sheet over the existing paper texture, with subtly deckled
+edges, fine seeded fibers and a broken circular pressure impression. Paths are cached at the
+canvas size; fibers stay fixed as ink is drawn. The guide softly recedes during drawing and returns
+on reset. This is code-native decoration, separate from the stroke canvas and transparent ink
+export; it does not change the drawing bounds or add anything to saved artwork.

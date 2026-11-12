@@ -2,6 +2,8 @@ package app.enso.meditation.ui
 
 import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
@@ -25,11 +27,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -38,7 +36,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import app.enso.meditation.R
-import app.enso.meditation.ui.theme.FadedInk
 import app.enso.meditation.ui.theme.Ink
 import app.enso.meditation.ui.theme.Paper
 import kotlin.math.*
@@ -61,6 +58,9 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
     val currentSettings by rememberUpdatedState(settings)
     var brushSettingsOpen by remember { mutableStateOf(false) }
     var drawing by remember { mutableStateOf(false) }
+    val guidePresence by animateFloatAsState(
+        if (drawing) .2f else if (strokes.isEmpty()) 1f else .45f,
+        tween(550), label = "paper guide")
     var saving by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val busy = saving || transitioning || closing
@@ -104,9 +104,12 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
         val canvasDescription = stringResource(R.string.painting_canvas)
         val strokesDescription = if (strokes.isEmpty()) stringResource(R.string.empty_canvas)
             else pluralStringResource(R.plurals.brush_strokes, strokes.size, strokes.size)
-        Canvas(Modifier.offset { IntOffset(artworkBounds.left.roundToInt(), artworkBounds.top.roundToInt()) }
+        val canvasFrame = Modifier.offset { IntOffset(artworkBounds.left.roundToInt(), artworkBounds.top.roundToInt()) }
             .wrapContentSize(Alignment.TopStart, unbounded = true).size(with(LocalDensity.current) { artworkBounds.width.toDp() },
-                with(LocalDensity.current) { artworkBounds.height.toDp() }).clipToBounds()
+                with(LocalDensity.current) { artworkBounds.height.toDp() })
+        DrawingPaper(canvasFrame, guideBounds.center - artworkBounds.topLeft,
+            guideBounds.width * ENSO_GUIDE_RADIUS) { guidePresence }
+        Canvas(canvasFrame.clipToBounds()
             .semantics {
                 contentDescription = canvasDescription
                 stateDescription = strokesDescription
@@ -135,15 +138,6 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
                     } finally { stroke.finish(); drawing = false }
                 }
             }) {
-            // Soft boundary bands mark the full-width export area without a hard box.
-            val feather = 18.dp.toPx()
-            drawRect(Brush.verticalGradient(listOf(FadedInk.copy(alpha = .12f), Color.Transparent),
-                startY = 0f, endY = feather), size = Size(size.width, feather))
-            drawRect(Brush.verticalGradient(listOf(Color.Transparent, FadedInk.copy(alpha = .12f)),
-                startY = size.height - feather, endY = size.height),
-                topLeft = Offset(0f, size.height - feather), size = Size(size.width, feather))
-            drawCircle(FadedInk.copy(alpha = .32f), radius = guideBounds.width * ENSO_GUIDE_RADIUS,
-                center = guideBounds.center - artworkBounds.topLeft, style = Stroke(1.dp.toPx()))
             if (!transitioning) for (stroke in strokes) brush.draw(this, stroke)
         }
         Column(Modifier.zIndex(1f).align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(20.dp),

@@ -1526,7 +1526,9 @@ width; ink depletes with travelled distance relative to the guide circumference,
 start and dry separated hairs later. Deposited marks stay fixed as the stroke grows; lifting adds
 a short tapered finish. The renderer is local Canvas code with no additional Ink dependency. A visible but subdued circular guide sits beneath the ink; it does not
 snap or constrain the drawing. The square canvas extends to both screen edges, centered on the
-timer artwork, with subtle feathered bands marking its upper and lower boundaries. The guide stays
+timer artwork, with softly deckled washi edges marking its upper and lower boundaries. A lighter paper wash and
+fine fixed fibers distinguish the drawing sheet; a broken, embossed circular guide recedes while
+drawing and returns on reset. All paper decoration stays out of the exported ink. The guide stays
 at the standard ink ring's centerline. Persist the canvas-to-guide scale alongside the one image so
 full-width strokes retain their size and position on the timer; older images default to scale 1.
 Allow multiple strokes. X and Android Back close the drawing area; Reset clears its strokes.
