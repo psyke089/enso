@@ -1519,7 +1519,7 @@ The final implementation summary must not claim functionality was tested if it w
 
 # 64. Finger-painted Enso Experiment
 
-On the experiment branch, a discreet brush icon next to Settings opens a full-screen washi drawing area.
+A discreet brush icon next to Settings opens a full-screen washi drawing area in normal mode.
 Draw freehand with a single finger. Lightly smooth the input while preserving the drawn shape;
 use overlapping textured nib impressions and individually damped bristles. Speed gently controls
 width; ink depletes with travelled distance relative to the guide circumference, producing a dense
@@ -1535,10 +1535,15 @@ Allow multiple strokes. X and Android Back close the drawing area; Reset clears 
 The draft exists only while the drawing area is open until Save & use is tapped. That button renders
 only the ink to a transparent PNG, atomically replacing the one private saved Enso image, and applies
 it to the timer immediately. Persist it across app restarts; never ask for a filename or storage access.
+Store the PNG payload, canvas scale and drawing timestamp together in a versioned atomic local
+record. Read older standalone PNG/preferences installations until their next write migrates them.
+Restoring standard artwork writes a record without an image, preserving the drawing timestamp.
 Use standard removes the custom image and restores the bundled artwork. Reset clears only the draft;
 X and Back discard uncommitted drawing. Custom artwork keeps its painted orientation on application;
 subsequent minute-setting gestures rotate it in the same way as the standard artwork.
 Opening, drawing and clearing must not modify timer settings, selected duration or repetitions.
+Place the repetition tally at a fixed 16 dp distance below the timer frame, independent of
+the saved drawing. Loading, saving or rotating artwork must not shift the controls below it.
 The timer screen keeps its state under the drawing area; an existing session continues normally.
 
 The painter's Brush panel exposes width, ink flow, ink reach (relative to the guide circumference),
@@ -1595,11 +1600,19 @@ the app on a new day checks again; crossing midnight while using the app does no
 A setting, off by default. While it is on, the main view hides the brush button, and the drawing
 view offers exactly one control: the checkmark that saves the painting. Close, reset,
 restore-standard and brush settings disappear, and Back does not leave the canvas; a painting can
-only be accepted as it is. The canvas opens as the next view after the setting is enabled, and on
-every launch or foreground return of a local day whose drawing is not yet saved. Once saved, the
-canvas cannot be opened again before the next local day, so each day allows a single attempt.
-Switching the setting off restores all controls immediately. The mode stores nothing beyond the
-daily saved drawing itself.
+only be accepted as it is. After closing Settings, the canvas opens as the next view when the
+setting has been enabled, even if a normal drawing was already saved today. Persist the activation
+time with the setting so this obligation survives a restart. It is satisfied by a painting saved
+after activation. The canvas also opens on every launch or foreground return of a local day whose
+drawing is not yet saved. Once saved, the canvas cannot be opened again before the next local day
+while the mode remains enabled. Switching the setting off restores all controls immediately;
+enabling it again starts a new activation and requires a new drawing. The mode stores only its
+activation time in addition to the daily saved drawing itself.
+
+Unsaved drafts remain temporary, including in Hardcore mode: activity recreation or process death
+discards their strokes and reopens an empty canvas if a painting is still required. This is an
+accepted limitation; the mode limits accepted paintings while enabled, not attempts interrupted
+before saving. Do not add automatic draft persistence.
 
 # Localization
 

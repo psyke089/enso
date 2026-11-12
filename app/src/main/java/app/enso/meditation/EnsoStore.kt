@@ -30,6 +30,7 @@ class EnsoStore(private val context: Context) {
     private val hapticFeedback = booleanPreferencesKey("haptic_feedback")
     private val showTime = booleanPreferencesKey("show_time")
     private val showSaying = booleanPreferencesKey("show_saying")
+    private val hardcoreEnabledAt = longPreferencesKey("hardcore_enabled_at")
     private val hardcore = booleanPreferencesKey("hardcore_mode")
     private val sayingIndex = intPreferencesKey("saying_index")
     private val interval = longPreferencesKey("session_interval_ms")
@@ -56,7 +57,7 @@ class EnsoStore(private val context: Context) {
                 GongChoice.fromName(p[endSound]) ?: defaults.endGongSound,
                 GongChoice.fromName(p[middleSound]) ?: defaults.middleGongSound,
                 p[showSaying] ?: true, p[rotationStep]?.takeIf { it in ROTATION_STEP_OPTIONS } ?: 5,
-                p[showTime] ?: true, p[hapticFeedback] ?: true, p[hardcore] ?: false), session, p[sayingIndex] ?: -1,
+                p[showTime] ?: true, p[hapticFeedback] ?: true, p[hardcore] ?: false, p[hardcoreEnabledAt] ?: 0L), session, p[sayingIndex] ?: -1,
             p[repeatCount] ?: 1, p[repeatForever] ?: p[legacyContinuous] ?: false)
     }
 
@@ -79,6 +80,7 @@ class EnsoStore(private val context: Context) {
             p[showTime] = snapshot.settings.showTime
             p[showSaying] = snapshot.settings.showSaying
             p[hardcore] = snapshot.settings.hardcoreMode
+            p[hardcoreEnabledAt] = snapshot.settings.hardcoreEnabledAt
             p[sayingIndex] = snapshot.sayingIndex
             val session = snapshot.session
             if (session == null) {

@@ -10,7 +10,7 @@ enum class GongChoice(val resourceName: String, @StringRes val labelRes: Int) {
     Root("gong_root", R.string.gong_root),
     RootDeep("gong_root_deep", R.string.gong_root_deep),
     Sacral("gong_sacral", R.string.gong_sacral),
-    SolarPlexus("gong_solar_plexus", R.string.gong_solar_plexus),
+    SolarPlexus("gong_solar", R.string.gong_solar_plexus),
     Heart("gong_heart", R.string.gong_heart),
     Throat("gong_throat", R.string.gong_throat),
     ThirdEye("gong_third_eye", R.string.gong_third_eye),

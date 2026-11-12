@@ -5,8 +5,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val ensoVersionCode = 12
-val ensoVersionName = "1.5.3"
+val ensoVersionCode = 13
+val ensoVersionName = "1.6.0"
 
 // Signing stays optional so debug builds work without a local keystore.
 val keystoreProperties = Properties().apply {

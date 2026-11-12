@@ -95,7 +95,14 @@ class SessionController(application: Application) {
     fun previewGong(choice: GongChoice) { audio.play(choice) }
 
     fun changeSettings(change: (EnsoSettings) -> EnsoSettings) {
-        scope.launch { mutate { updateSettings(change(snapshot.settings)); emptyList() } }
+        scope.launch { mutate {
+            val previous = snapshot.settings
+            val next = change(previous)
+            // Persist the activation together with the toggle, even if today's normal Enso exists.
+            updateSettings(if (next.hardcoreMode && !previous.hardcoreMode)
+                next.copy(hardcoreEnabledAt = System.currentTimeMillis()) else next)
+            emptyList()
+        } }
     }
 
     suspend fun command(action: SessionAction) = mutate {

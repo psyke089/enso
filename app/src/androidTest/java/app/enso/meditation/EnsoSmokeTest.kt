@@ -40,9 +40,14 @@ class EnsoSmokeTest {
         compose.activity.resources.getStringArray(R.array.sayings).getOrNull(index).orEmpty()
 
     private var savedArtworkDates: Pair<Long?, Long?>? = null
+    private var savedArtworkFiles: Map<String, ByteArray?> = emptyMap()
 
     @Before fun dismissDailyPromptForControlTests() {
         val preferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
+        savedArtworkFiles = listOf("painted_enso.dat", "painted_enso.png").associateWith { name ->
+            try { android.util.AtomicFile(java.io.File(compose.activity.filesDir, name)).readFully() }
+            catch (_: java.io.FileNotFoundException) { null }
+        }
         savedArtworkDates = (if (preferences.contains("last_drawn_at")) preferences.getLong("last_drawn_at", 0L) else null) to
             (if (preferences.contains("last_dismissed_at")) preferences.getLong("last_dismissed_at", 0L) else null)
         awaitState { it.ready }
@@ -62,6 +67,14 @@ class EnsoSmokeTest {
     }
 
     @After fun restoreArtworkDates() {
+        for ((name, bytes) in savedArtworkFiles) {
+            val file = android.util.AtomicFile(java.io.File(compose.activity.filesDir, name))
+            if (bytes == null) file.delete() else {
+                val output = file.startWrite()
+                try { output.write(bytes); file.finishWrite(output) }
+                catch (failure: Exception) { file.failWrite(output); throw failure }
+            }
+        }
         savedArtworkDates?.let { (drawn, dismissed) ->
             val edit = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE).edit()
             if (drawn == null) edit.remove("last_drawn_at") else edit.putLong("last_drawn_at", drawn)
@@ -84,6 +97,7 @@ class EnsoSmokeTest {
     @Test fun dailyDrawingPromptHonorsCloseAndReturnsTheNextDay() {
         val preferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
         val store = app.enso.meditation.ui.EnsoImageStore(compose.activity)
+        android.util.AtomicFile(java.io.File(compose.activity.filesDir, "painted_enso.dat")).delete()
         preferences.edit().putLong("last_drawn_at", 0L).putLong("last_dismissed_at", 0L).commit()
         compose.activityRule.scenario.recreate()
         compose.waitUntil(5_000) {
@@ -606,16 +620,23 @@ class EnsoSmokeTest {
         val originalScale = imageStore.frameScale()
         val originalDrawnAt = preferences.getLong("last_drawn_at", 0L)
         try {
+            // Exercise migration dates without changing an already committed artwork record.
+            android.util.AtomicFile(java.io.File(compose.activity.filesDir, "painted_enso.dat")).delete()
             // A dismissed invitation still opens the canvas, because hardcore has no dismissal.
             preferences.edit().putLong("last_drawn_at", 0L)
                 .putLong("last_dismissed_at", System.currentTimeMillis()).commit()
             assertTrue(imageStore.shouldOpenPainter(hardcore = true))
             assertFalse(imageStore.shouldOpenPainter(hardcore = false))
 
+            // An ordinary painting saved today must not swallow a new activation.
+            preferences.edit().putLong("last_drawn_at", System.currentTimeMillis() - 1_000L).commit()
+            assertTrue(imageStore.wasDrawnToday())
             compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
             compose.onNodeWithText(str(R.string.hardcore_mode)).performScrollTo().performClick()
             awaitState { it.settings.hardcoreMode }
-            assertTrue(runBlocking { EnsoStore(compose.activity).load() }.settings.hardcoreMode)
+            val enabledSettings = runBlocking { EnsoStore(compose.activity).load() }.settings
+            assertTrue(enabledSettings.hardcoreMode)
+            assertTrue(imageStore.shouldOpenPainter(true, enabledAt = enabledSettings.hardcoreEnabledAt))
             compose.onNodeWithContentDescription(str(R.string.close_settings)).performScrollTo().performClick()
 
             // Closing settings hands straight over to the single canvas of the day.
@@ -628,6 +649,11 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription(str(R.string.reset_painting)).assertDoesNotExist()
             compose.onNodeWithContentDescription(str(R.string.save_painted_enso)).assertIsNotEnabled()
 
+            // Pending activation also survives activity recreation before any drawing is saved.
+            compose.activityRule.scenario.recreate()
+            compose.waitUntil(5_000) {
+                compose.onAllNodesWithContentDescription(str(R.string.painting_canvas)).fetchSemanticsNodes().isNotEmpty()
+            }
             // Back must not leave the canvas; only the checkmark does.
             androidx.test.espresso.Espresso.pressBack()
             compose.onNodeWithContentDescription(str(R.string.painting_canvas)).assertIsDisplayed()
@@ -647,7 +673,8 @@ class EnsoSmokeTest {
                 compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty()
             }
             assertTrue(imageStore.wasDrawnToday())
-            assertFalse(imageStore.shouldOpenPainter(hardcore = true))
+            assertFalse(imageStore.shouldOpenPainter(hardcore = true,
+                enabledAt = state.settings.hardcoreEnabledAt))
 
             // The one attempt is spent: no button, no canvas, also not after a relaunch.
             compose.onNodeWithContentDescription(str(R.string.paint_enso)).assertDoesNotExist()

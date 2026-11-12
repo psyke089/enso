@@ -134,25 +134,29 @@ fun EnsoScreen(
     var handoffImage by remember { mutableStateOf<ImageBitmap?>(null) }
     var handoffBounds by remember { mutableStateOf<Rect?>(null) }
     LaunchedEffect(imageStore) {
-        val saved = withContext(Dispatchers.IO) { imageStore.load()?.also { it.prepareToDraw() }?.asImageBitmap() to imageStore.frameScale() }
+        val saved = withContext(Dispatchers.IO) {
+            val bitmap = imageStore.load()?.also { it.prepareToDraw() }
+            bitmap?.asImageBitmap() to imageStore.frameScale()
+        }
         customEnso = saved.first
         customFrameScale = saved.second
         artworkLoaded = true
     }
-    LaunchedEffect(foregroundVisit, launchComplete, state.ready, circleBounds != null, hardcore, settingsOpen) {
+    LaunchedEffect(foregroundVisit, launchComplete, state.ready, circleBounds != null, hardcore, state.settings.hardcoreEnabledAt, settingsOpen) {
         if (launchComplete && state.ready && circleBounds != null && !settingsOpen && !paintingOpen) {
             drawnToday = imageStore.wasDrawnToday()
             // Hardcore mode demands the one canvas of the day; otherwise this stays an invitation.
-            if (imageStore.shouldOpenPainter(hardcore)) {
+            if (imageStore.shouldOpenPainter(hardcore, enabledAt = state.settings.hardcoreEnabledAt)) {
                 painterOpacity.snapTo(0f)
                 paintingOpen = true
-                painterOpacity.animateTo(1f, tween(450))
+                // Finish the reveal even when another effect key changes during the fade.
+                scope.launch { painterOpacity.animateTo(1f, tween(450)) }
             }
         }
     }
     LaunchedEffect(splashReleased, artworkLoaded, circleBounds != null, state.ready) {
         if (!launchComplete && splashReleased && artworkLoaded && circleBounds != null && state.ready) {
-            launchToPainter = animateLaunch && imageStore.shouldOpenPainter(state.settings.hardcoreMode)
+            launchToPainter = animateLaunch && imageStore.shouldOpenPainter(hardcore, enabledAt = state.settings.hardcoreEnabledAt)
             // Both destinations are composed before the first moving frame. One clock keeps
             // translation, artwork blending and the controls continuous, without a mid-flight mount.
             withFrameNanos { }
@@ -211,6 +215,7 @@ fun EnsoScreen(
                     Spacer(Modifier.height(topSpace))
                     TimerCircle(state, adjustDuration, adjustRepetitions, customEnso, customFrameScale, !handingOff && launchComplete,
                         Modifier.size(circleSize).testTag("Timer artwork frame").onGloballyPositioned { circleBounds = Rect(it.positionInRoot(), it.size.toSize()) })
+                    Spacer(Modifier.height(16.dp))
                     RepetitionDisplay(state)
                     Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
                     InkAction(

@@ -23,6 +23,7 @@ data class EnsoSettings(
     val showTime: Boolean = true,
     val hapticFeedback: Boolean = true,
     val hardcoreMode: Boolean = false,
+    val hardcoreEnabledAt: Long = 0L,
 )
 
 enum class TimerPhase { Idle, Running, Paused }
