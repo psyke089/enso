@@ -77,3 +77,11 @@ The brush settings button now combines the code-native main-view `BrushMark` sil
 same brush with a miniature `enso_brush.png`; no new generated assets are needed.
 The native splash now hands off to a Compose layer that moves and crossfades into the timer
 artwork before controls appear, superseding the earlier native-only transition description.
+
+## Launcher icon (2026-11-12)
+
+The launcher now reuses `native_splash_enso.png`, preserving the splash mark's ink texture and
+orientation. `enso_icon.xml` fits its transparent foreground into the adaptive icon's 66dp safe
+region; both the regular and themed/monochrome adaptive icons use this silhouette over the warm
+paper background. Android 7 uses the same PNG in a paper-backed layer list. No new artwork was
+generated, and the splash asset itself is unchanged.
