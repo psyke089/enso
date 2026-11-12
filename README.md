@@ -7,7 +7,7 @@
 <p align="center">A quiet, offline meditation timer and interval gong for Android.</p>
 
 <p align="center">
-  <a href="https://github.com/psyke089/enso/releases"><img src="https://img.shields.io/badge/release-v1.5.2-blue?logo=github&logoColor=white" alt="Release v1.5.2"></a>
+  <a href="https://github.com/psyke089/enso/releases"><img src="https://img.shields.io/badge/release-v1.5.3-blue?logo=github&logoColor=white" alt="Release v1.5.3"></a>
   <img src="https://img.shields.io/badge/vibe_coded-100%25-critical?logo=github&logoColor=white" alt="No human review">
   <img src="https://img.shields.io/badge/human_review-none-green?logo=github&logoColor=white" alt="Human review: none">
 </p>
@@ -24,6 +24,7 @@ Enso is a minimal meditation timer built with Kotlin and Jetpack Compose. It run
 - **Tap the circle to choose repetitions.** Left subtracts one, right adds one, down to 0 for unlimited repetitions. Small brush marks below the circle show the repetitions; each completed countdown fades one mark from the right. A quiet elapsed / total time display inside the circle tracks finite sessions; unlimited sessions show a larger hand-painted infinity mark.
 - **Paint your own Enso.** The brush opens a full-screen ink canvas with a faint guide circle and a textured sumi brush: width, ink flow, reach, bristle count, drag, speed influence and smoothing are tuneable in the slider panel and stored locally. Saving keeps the drawing in app-private storage, uses it in place of the standard artwork and shows a small painted mark on the brush button for the rest of the day; restore the standard Enso any time.
 - **A daily invitation.** On the first foreground visit of each local day without a saved drawing, the canvas opens on its own; closing it defers the invitation until tomorrow.
+- **English and German UI.** The visible interface, accessibility labels, notifications, gong names and sayings follow the system or per-app language; unsupported locales fall back to English.
 - **Subtle selection feedback.** A soft click and short vibration mark each duration or repetition change. Switch both off with Haptic Feedback, independently of interval-end Vibration. Session buttons have no selection feedback.
 - **One calm screen** for Start, Pause, Resume and Reset, using hand-drawn sumi ink controls with accessible action labels.
 - **Choose your gongs.** Separate Start, End and Repeat gongs, each pickable from nine bundled bell recordings and previewable in the settings sheet.

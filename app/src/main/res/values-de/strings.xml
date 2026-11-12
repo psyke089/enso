@@ -1,0 +1,136 @@
+<resources>
+    <string name="app_name">Enso</string>
+
+    <string name="action_start">Start</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Fortsetzen</string>
+    <string name="action_reset">Zurücksetzen</string>
+    <string name="storage_warning">Änderungen konnten auf diesem Gerät nicht gespeichert werden.</string>
+
+    <string name="settings">Einstellungen</string>
+    <string name="close_settings">Einstellungen schließen</string>
+    <string name="app_version">App-Version %1$s</string>
+    <string name="version_label">v%1$s</string>
+    <string name="minutes_per_step">Minuten pro Schritt</string>
+    <string name="minutes_short">%1$d Min.</string>
+    <string name="smaller_minute_step">Kleinerer Minutenschritt</string>
+    <string name="larger_minute_step">Größerer Minutenschritt</string>
+    <string name="haptic_feedback">Haptisches Feedback</string>
+    <string name="start_gong">Start-Gong</string>
+    <string name="end_gong">End-Gong</string>
+    <string name="repeat_gong">Intervall-Gong</string>
+    <string name="keep_screen_awake">Bildschirm anlassen</string>
+    <string name="vibration">Vibration</string>
+    <string name="show_time">Zeit anzeigen</string>
+    <string name="show_saying">Spruch anzeigen</string>
+    <string name="previous_gong">Vorheriger Gong</string>
+    <string name="next_gong">Nächster Gong</string>
+    <string name="preview_gong">%1$s anhören</string>
+
+
+    <plurals name="selected_minutes">
+        <item quantity="one">%1$d Minute</item>
+        <item quantity="other">%1$d Minuten</item>
+    </plurals>
+    <plurals name="increase_duration">
+        <item quantity="one">Meditationsdauer um %1$d Minute erhöhen</item>
+        <item quantity="other">Meditationsdauer um %1$d Minuten erhöhen</item>
+    </plurals>
+    <plurals name="decrease_duration">
+        <item quantity="one">Meditationsdauer um %1$d Minute verringern</item>
+        <item quantity="other">Meditationsdauer um %1$d Minuten verringern</item>
+    </plurals>
+    <plurals name="minutes_per_rotation_step">
+        <item quantity="one">%1$d Minute pro Drehschritt</item>
+        <item quantity="other">%1$d Minuten pro Drehschritt</item>
+    </plurals>
+    <plurals name="repetitions">
+        <item quantity="one">%1$d Wiederholung</item>
+        <item quantity="other">%1$d Wiederholungen</item>
+    </plurals>
+    <plurals name="brush_strokes">
+        <item quantity="one">%1$d Pinselstrich</item>
+        <item quantity="other">%1$d Pinselstriche</item>
+    </plurals>
+
+    <string name="timer_circle">Timer-Kreis</string>
+    <string name="increase_repetitions">Wiederholungen erhöhen</string>
+    <string name="decrease_repetitions">Wiederholungen verringern</string>
+    <string name="unlimited_repetitions">Unbegrenzte Wiederholungen (0)</string>
+    <string name="interval_of">Intervall %1$d von %2$s</string>
+    <string name="unlimited">unbegrenzt</string>
+    <string name="progress_counts">%1$d abgeschlossen, %2$d verbleibend</string>
+    <string name="time_selected">%1$s ausgewählt</string>
+    <string name="time_remaining">%1$s verbleibend</string>
+    <string name="paused">Pausiert</string>
+    <string name="elapsed_total">%1$s vergangen, %2$s Gesamtdauer</string>
+    <string name="total_duration">%1$s Gesamtdauer</string>
+
+    <string name="close_painting">Zeichnen schließen</string>
+    <string name="brush_settings">Pinsel-Einstellungen</string>
+    <string name="reset_painting">Zeichnung zurücksetzen</string>
+    <string name="painting_canvas">Enso-Zeichenfläche</string>
+    <string name="empty_canvas">Leere Fläche</string>
+    <string name="use_standard_enso">Standard-Enso verwenden</string>
+    <string name="save_painted_enso">Gezeichnetes Enso speichern und verwenden</string>
+    <string name="paint_enso">Enso zeichnen</string>
+    <string name="enso_drawn_today">Enso heute gezeichnet</string>
+    <string name="save_error">Das Enso konnte nicht gespeichert werden. Bitte erneut versuchen.</string>
+
+    <string name="close_brush_settings">Pinsel-Einstellungen schließen</string>
+    <string name="brush_width">Breite</string>
+    <string name="brush_ink_flow">Tintenfluss</string>
+    <string name="brush_ink_reach">Tintenreichweite</string>
+    <string name="brush_bristles">Borsten</string>
+    <string name="brush_drag">Borstenwiderstand</string>
+    <string name="brush_speed">Geschwindigkeitseinfluss</string>
+    <string name="brush_smoothing">Glättung</string>
+    <string name="brush_defaults">Standard</string>
+    <string name="brush_copy_values">Werte kopieren</string>
+    <string name="brush_copied">Kopiert</string>
+    <string name="brush_slider">Pinsel: %1$s</string>
+    <string name="brush_dp">%1$d dp</string>
+    <string name="brush_dp_text">%1$s dp</string>
+    <string name="brush_percent">%1$d %%</string>
+    <string name="brush_circles">%1$s Kreise</string>
+    <string name="brush_description">Enso-Pinsel\nBreite: %1$s dp\nTintenfluss: %2$s %%\nTintenreichweite: %3$s Kreise\nBorsten: %4$s\nBorstenwiderstand: %5$s %%\nGeschwindigkeitseinfluss: %6$s %%\nGlättung: %7$s dp</string>
+
+    <string name="notification_channel_name">Meditationstimer</string>
+    <string name="notification_channel_description">Verbleibende Meditationszeit und ruhige Steuerung auf dem Sperrbildschirm</string>
+    <string name="notification_meditation">Meditation</string>
+    <string name="notification_paused">%1$s · Pausiert</string>
+    <string name="notification_stop">Beenden</string>
+
+    <string name="gong_root">Wurzel</string>
+    <string name="gong_root_deep">Wurzel tief</string>
+    <string name="gong_sacral">Sakral</string>
+    <string name="gong_solar_plexus">Solarplexus</string>
+    <string name="gong_heart">Herz</string>
+    <string name="gong_throat">Hals</string>
+    <string name="gong_third_eye">Stirn</string>
+    <string name="gong_crown">Krone</string>
+    <string name="gong_bell">Glocke</string>
+
+    <string-array name="sayings">
+        <item>Lass diesen Atem genügen.</item>
+        <item>Sitz still. Lass die Welt sich entfalten.</item>
+        <item>Kehre sanft zurück zu dem, was jetzt ist.</item>
+        <item>Nichts festzuhalten. Nichts zu eilen.</item>
+        <item>Mach Platz für die vorüberziehenden Wolken.</item>
+        <item>Begegne diesem Augenblick mit Freundlichkeit.</item>
+        <item>Lass die Stille sich ihre Zeit nehmen.</item>
+        <item>Beginne mit einem weicheren Herzen von vorn.</item>
+        <item>Der Atem bittet nur darum, dass du lauschst.</item>
+        <item>Lass ein wenig Raum für das Staunen.</item>
+        <item>Ruh im Raum zwischen den Gedanken.</item>
+        <item>Jeder Atem ist ein stiller Anfang.</item>
+        <item>Du darfst die Last ablegen.</item>
+        <item>Lass den Geist sich klären wie klares Wasser.</item>
+        <item>Sei sanft mit dem, was du findest.</item>
+        <item>Ein stiller Augenblick braucht keine Antwort.</item>
+        <item>Lass diesen Augenblick so sein, wie er ist.</item>
+        <item>Bemerken. Weich werden. Neu beginnen.</item>
+        <item>In diesem Atem liegt keine Eile.</item>
+        <item>Lass deine Aufmerksamkeit eine Freundlichkeit sein.</item>
+    </string-array>
+</resources>

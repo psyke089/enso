@@ -26,9 +26,9 @@ class MeditationService : Service() {
         super.onCreate()
         notifications = getSystemService(NotificationManager::class.java)
         if (Build.VERSION.SDK_INT >= 26) {
-            notifications.createNotificationChannel(NotificationChannel(CHANNEL, "Meditation timer",
-                NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Remaining meditation time and quiet controls on the lock screen"
+            notifications.createNotificationChannel(NotificationChannel(CHANNEL,
+                getString(R.string.notification_channel_name), NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = getString(R.string.notification_channel_description)
                 setSound(null, null)
                 enableVibration(false)
                 setShowBadge(false)
@@ -80,11 +80,13 @@ class MeditationService : Service() {
     private fun notification(state: TimerUiState): Notification {
         val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        val remaining = formatTime(state.remainingMs)
         val builder = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle("Enso")
-            .setContentText(if (!state.ready) "Meditation" else
-                "${formatTime(state.remainingMs)}${if (state.phase == TimerPhase.Paused) " · Paused" else ""}" +
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(if (!state.ready) getString(R.string.notification_meditation) else
+                (if (state.phase == TimerPhase.Paused) getString(R.string.notification_paused, remaining)
+                    else remaining) +
                     if (state.continuous) " · ${state.completedIntervals + 1} / ∞"
                     else if (state.repeatCount > 1) " · ${state.completedIntervals + 1} / ${state.repeatCount}" else "")
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
@@ -93,8 +95,9 @@ class MeditationService : Service() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
         if (state.phase != TimerPhase.Idle) {
             val action = if (state.phase == TimerPhase.Paused) SessionAction.Resume else SessionAction.Pause
-            builder.addAction(0, action.name, pendingAction(action))
-            builder.addAction(0, "Stop", pendingAction(SessionAction.Stop))
+            builder.addAction(0, getString(if (action == SessionAction.Pause) R.string.action_pause
+                else R.string.action_resume), pendingAction(action))
+            builder.addAction(0, getString(R.string.notification_stop), pendingAction(SessionAction.Stop))
         }
         return builder.build()
     }

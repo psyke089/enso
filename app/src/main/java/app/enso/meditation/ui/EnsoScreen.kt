@@ -59,6 +59,9 @@ import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringArrayResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -204,7 +207,7 @@ fun EnsoScreen(
                     RepetitionDisplay(state)
                     Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
                     InkAction(
-                        label = when (state.phase) { TimerPhase.Idle -> "Start"; TimerPhase.Running -> "Pause"; TimerPhase.Paused -> "Resume" },
+                        label = stringResource(when (state.phase) { TimerPhase.Idle -> R.string.action_start; TimerPhase.Running -> R.string.action_pause; TimerPhase.Paused -> R.string.action_resume }),
                         artwork = if (state.phase == TimerPhase.Running) R.drawable.ink_pause else R.drawable.ink_start,
                         enabled = state.ready,
                         onClick = { action(when (state.phase) {
@@ -214,14 +217,16 @@ fun EnsoScreen(
                         }) },
                     )
                     Box(Modifier.height(52.dp), contentAlignment = Alignment.Center) {
-                        if (state.phase != TimerPhase.Idle) InkAction("Reset", R.drawable.ink_reset,
+                        if (state.phase != TimerPhase.Idle) InkAction(stringResource(R.string.action_reset), R.drawable.ink_reset,
                             enabled = state.ready, secondary = true) { action(SessionAction.Stop) }
                     }
-                    if (state.storageWarning) Text("Changes could not be saved on this device.",
+                    if (state.storageWarning) Text(stringResource(R.string.storage_warning),
                         color = Vermilion, fontSize = 13.sp,
                         modifier = Modifier.padding(horizontal = 24.dp), textAlign = TextAlign.Center)
                     Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
-                    Saying(state.saying, state.ready && state.settings.showSaying)
+                    val sayings = stringArrayResource(R.array.sayings)
+                    Saying(if (state.sayingIndex in sayings.indices) sayings[state.sayingIndex] else "",
+                        state.ready && state.settings.showSaying)
                 }
             }
             AnimatedVisibility(
@@ -338,8 +343,11 @@ private fun RepetitionDisplay(state: TimerUiState) {
     val active = state.phase != TimerPhase.Idle
     val completed = if (active) state.completedIntervals.coerceIn(0, state.repeatCount.toLong()).toInt() else 0
     val description = if (active)
-        "Interval ${state.completedIntervals + 1} of ${if (state.continuous) "unlimited" else state.repeatCount}"
-        else if (state.continuous) "Unlimited repetitions (0)" else "${state.repeatCount} repetitions"
+        stringResource(R.string.interval_of, (state.completedIntervals + 1).toInt(),
+            if (state.continuous) stringResource(R.string.unlimited) else state.repeatCount.toString())
+        else if (state.continuous) stringResource(R.string.unlimited_repetitions)
+        else pluralStringResource(R.plurals.repetitions, state.repeatCount, state.repeatCount)
+    val progressDescription = stringResource(R.string.progress_counts, completed, state.repeatCount - completed)
     Box(Modifier.fillMaxWidth().height(48.dp).padding(horizontal = 28.dp), contentAlignment = Alignment.Center) {
         if (state.continuous) {
             Image(painterResource(R.drawable.ink_infinity), contentDescription = description,
@@ -347,7 +355,7 @@ private fun RepetitionDisplay(state: TimerUiState) {
         } else {
             Canvas(Modifier.widthIn(max = 300.dp).fillMaxWidth().height(28.dp).semantics {
                 contentDescription = description
-                stateDescription = "$completed completed, ${state.repeatCount - completed} remaining"
+                stateDescription = progressDescription
             }) {
                 val spacing = minOf(15.dp.toPx(), size.width / state.repeatCount)
                 val start = (size.width - spacing * state.repeatCount) / 2
@@ -392,13 +400,12 @@ private fun SessionTime(state: TimerUiState) {
     val active = state.phase != TimerPhase.Idle
     val total = state.totalMs?.let(::formatTime) ?: return
     val elapsed = formatTime(state.elapsedMs / 1000 * 1000)
+    val description = if (active) stringResource(R.string.elapsed_total, elapsed, total)
+        else stringResource(R.string.total_duration, total)
     Box(Modifier.height(28.dp), contentAlignment = Alignment.Center) {
         Text(if (active) "$elapsed / $total" else total,
             color = FadedInk, fontFamily = FontFamily.Monospace, fontSize = 12.sp,
-            modifier = Modifier.semantics {
-                contentDescription = if (active) "$elapsed elapsed, $total total duration"
-                    else "$total total duration"
-            })
+            modifier = Modifier.semantics { contentDescription = description })
     }
 }
 
@@ -407,9 +414,10 @@ private fun SessionTime(state: TimerUiState) {
 private fun InkSettingsButton(onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
+    val label = stringResource(R.string.settings)
     Box(Modifier.size(44.dp).clip(CircleShape)
         .clickable(interactionSource = interaction, indication = null, onClick = onClick)
-        .semantics { contentDescription = "Settings" }, contentAlignment = Alignment.Center) {
+        .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
         Image(painterResource(R.drawable.ink_settings), contentDescription = null,
             alpha = if (pressed) .45f else .8f, modifier = Modifier.fillMaxSize())
     }
@@ -479,11 +487,15 @@ private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit,
             (fontScale / 1.25f).coerceAtLeast(1f)
         if (state.settings.showTime) Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(6.dp))
-            Text(formatTime(state.remainingMs), fontFamily = FontFamily.Monospace,
+            val timeText = formatTime(state.remainingMs)
+            val timeDescription = stringResource(if (state.phase == TimerPhase.Idle)
+                R.string.time_selected else R.string.time_remaining, timeText)
+            val pausedDescription = stringResource(R.string.paused)
+            Text(timeText, fontFamily = FontFamily.Monospace,
                 fontWeight = FontWeight.Light, fontSize = textSize.sp, color = Ink,
                 maxLines = 1, modifier = Modifier.semantics {
-                    contentDescription = "${formatTime(state.remainingMs)} ${if (state.phase == TimerPhase.Idle) "selected" else "remaining"}"
-                    if (state.phase == TimerPhase.Paused) stateDescription = "Paused"
+                    contentDescription = timeDescription
+                    if (state.phase == TimerPhase.Paused) stateDescription = pausedDescription
                 })
             SessionTime(state)
         }
@@ -504,13 +516,19 @@ private fun CircleInput(state: TimerUiState, duration: (Int) -> Unit, repetition
     val currentRepetitions by rememberUpdatedState(repetitions)
     val currentRotateBrush by rememberUpdatedState(rotateBrush)
     val currentState by rememberUpdatedState(state)
+    val stepMinutes = state.settings.rotationStepMinutes
+    val circleDescription = stringResource(R.string.timer_circle)
+    val minutesDescription = pluralStringResource(R.plurals.selected_minutes,
+        (state.selectedMs / 60_000).toInt(), (state.selectedMs / 60_000).toInt())
+    val increaseDescription = pluralStringResource(R.plurals.increase_duration, stepMinutes, stepMinutes)
+    val decreaseDescription = pluralStringResource(R.plurals.decrease_duration, stepMinutes, stepMinutes)
     Row(Modifier.fillMaxSize().clip(CircleShape)
         .semantics {
-            contentDescription = "Timer circle"
-            stateDescription = "${state.selectedMs / 60_000} minutes"
+            contentDescription = circleDescription
+            stateDescription = minutesDescription
             customActions = listOf(
-                CustomAccessibilityAction("Increase meditation duration by ${state.settings.rotationStepMinutes} minutes") { currentDuration(1); true },
-                CustomAccessibilityAction("Decrease meditation duration by ${state.settings.rotationStepMinutes} minutes") { currentDuration(-1); true },
+                CustomAccessibilityAction(increaseDescription) { currentDuration(1); true },
+                CustomAccessibilityAction(decreaseDescription) { currentDuration(-1); true },
             )
         }
         .pointerInput(Unit) {
@@ -562,11 +580,15 @@ private fun CircleInput(state: TimerUiState, duration: (Int) -> Unit, repetition
                 }
             }
         }) {
+        val increaseLabel = stringResource(R.string.increase_repetitions)
+        val decreaseLabel = stringResource(R.string.decrease_repetitions)
+        val repeatsDescription = if (state.continuous) stringResource(R.string.unlimited_repetitions)
+            else pluralStringResource(R.plurals.repetitions, state.repeatCount, state.repeatCount)
         for (direction in listOf(-1, 1)) {
             Box(Modifier.weight(1f).fillMaxHeight().semantics {
                 role = Role.Button
-                contentDescription = if (direction > 0) "Increase repetitions" else "Decrease repetitions"
-                stateDescription = if (state.continuous) "Unlimited repetitions (0)" else "${state.repeatCount} repetitions"
+                contentDescription = if (direction > 0) increaseLabel else decreaseLabel
+                stateDescription = repeatsDescription
                 onClick { currentRepetitions(direction); true }
             }.onKeyEvent {
                 if (it.type == KeyEventType.KeyUp && (it.key == Key.Enter || it.key == Key.Spacebar)) {
@@ -609,38 +631,47 @@ private fun SettingsPanel(
             Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp))
                 .background(Ink.copy(alpha = .3f)))
         }
+        val versionText = stringResource(R.string.version_label, BuildConfig.VERSION_NAME)
+        val versionDescription = stringResource(R.string.app_version, BuildConfig.VERSION_NAME)
+        val closeLabel = stringResource(R.string.close_settings)
         Row(Modifier.fillMaxWidth().padding(bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            Text("v${BuildConfig.VERSION_NAME}", color = FadedInk.copy(alpha = .65f), fontFamily = FontFamily.Serif,
+            Text(versionText, color = FadedInk.copy(alpha = .65f), fontFamily = FontFamily.Serif,
                 fontSize = 12.sp, modifier = Modifier.weight(1f)
-                    .semantics { contentDescription = "App version ${BuildConfig.VERSION_NAME}" })
+                    .semantics { contentDescription = versionDescription })
             Box(Modifier.size(44.dp).offset(x = 7.dp).clip(CircleShape)
                 .clickable(interactionSource = remember { MutableInteractionSource() },
                     indication = null, onClick = onDone)
-                .semantics { contentDescription = "Close settings" },
+                .semantics { contentDescription = closeLabel },
                 contentAlignment = Alignment.Center) {
                 Text("\u00D7", color = FadedInk.copy(alpha = .65f), fontSize = 24.sp)
             }
         }
+        val stepMinutes = settings.rotationStepMinutes
+        val stepLabel = stringResource(R.string.minutes_per_step)
+        val stepValue = stringResource(R.string.minutes_short, stepMinutes)
+        val stepDescription = pluralStringResource(R.plurals.minutes_per_rotation_step, stepMinutes, stepMinutes)
+        val smallerStep = stringResource(R.string.smaller_minute_step)
+        val largerStep = stringResource(R.string.larger_minute_step)
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("Minutes per step", color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif,
+            Text(stepLabel, color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif,
                 modifier = Modifier.weight(1f).padding(end = 12.dp))
             val index = ROTATION_STEP_OPTIONS.indexOf(settings.rotationStepMinutes).coerceAtLeast(0)
             fun select(offset: Int) {
                 val next = (index + offset + ROTATION_STEP_OPTIONS.size) % ROTATION_STEP_OPTIONS.size
                 changeSettings { it.copy(rotationStepMinutes = ROTATION_STEP_OPTIONS[next]) }
             }
-            PickerArrow("‹", "Smaller minute step") { select(-1) }
-            Text("${settings.rotationStepMinutes} min", fontFamily = FontFamily.Serif, color = Ink,
+            PickerArrow("‹", smallerStep) { select(-1) }
+            Text(stepValue, fontFamily = FontFamily.Serif, color = Ink,
                 textAlign = TextAlign.Center, modifier = Modifier.width(56.dp).semantics {
-                    contentDescription = "${settings.rotationStepMinutes} minutes per rotation step"
+                    contentDescription = stepDescription
                 })
-            PickerArrow("›", "Larger minute step") { select(1) }
+            PickerArrow("›", largerStep) { select(1) }
         }
-        Setting("Haptic Feedback", settings.hapticFeedback) { value ->
+        Setting(stringResource(R.string.haptic_feedback), settings.hapticFeedback) { value ->
             changeSettings { it.copy(hapticFeedback = value) }
         }
-        Setting("Start Gong", settings.startGong,
+        Setting(stringResource(R.string.start_gong), settings.startGong,
             gong = settings.startGongSound,
             onGong = { choice ->
                 changeSettings { it.copy(startGong = true, startGongSound = choice) }
@@ -649,7 +680,7 @@ private fun SettingsPanel(
             onPreview = previewGong) { value ->
             changeSettings { it.copy(startGong = value) }
         }
-        Setting("End Gong", settings.endGong,
+        Setting(stringResource(R.string.end_gong), settings.endGong,
             gong = settings.endGongSound,
             onGong = { choice ->
                 changeSettings { it.copy(endGong = true, endGongSound = choice) }
@@ -658,7 +689,7 @@ private fun SettingsPanel(
             onPreview = previewGong) { value ->
             changeSettings { it.copy(endGong = value) }
         }
-        Setting("Repeat Gong", settings.repeatGong,
+        Setting(stringResource(R.string.repeat_gong), settings.repeatGong,
             gong = settings.middleGongSound,
             onGong = { choice ->
                 changeSettings { it.copy(repeatGong = true, middleGongSound = choice) }
@@ -667,16 +698,16 @@ private fun SettingsPanel(
             onPreview = previewGong) { value ->
             changeSettings { it.copy(repeatGong = value) }
         }
-        Setting("Keep Screen Awake", settings.keepScreenAwake) { value ->
+        Setting(stringResource(R.string.keep_screen_awake), settings.keepScreenAwake) { value ->
             changeSettings { it.copy(keepScreenAwake = value) }
         }
-        Setting("Vibration", settings.vibration) { value ->
+        Setting(stringResource(R.string.vibration), settings.vibration) { value ->
             changeSettings { it.copy(vibration = value) }
         }
-        Setting("Show Time", settings.showTime) { value ->
+        Setting(stringResource(R.string.show_time), settings.showTime) { value ->
             changeSettings { it.copy(showTime = value) }
         }
-        Setting("Show Saying", settings.showSaying) { value ->
+        Setting(stringResource(R.string.show_saying), settings.showSaying) { value ->
             changeSettings { it.copy(showSaying = value) }
         }
     }
@@ -707,18 +738,22 @@ private fun GongPicker(
     onSelect: (GongChoice) -> Unit,
     onPreview: (GongChoice) -> Unit,
 ) {
+    val label = stringResource(choice.labelRes)
+    val previewDescription = stringResource(R.string.preview_gong, label)
+    val previousGong = stringResource(R.string.previous_gong)
+    val nextGong = stringResource(R.string.next_gong)
     Row(verticalAlignment = Alignment.CenterVertically) {
-        PickerArrow("‹", "Previous gong") { onSelect(choice.previous()) }
+        PickerArrow("‹", previousGong) { onSelect(choice.previous()) }
         Box(Modifier.width(92.dp).height(40.dp).clip(CircleShape)
             .clickable(interactionSource = remember { MutableInteractionSource() },
                 indication = null) { onPreview(choice) }
-            .semantics { contentDescription = "Preview ${choice.label}" },
+            .semantics { contentDescription = previewDescription },
             contentAlignment = Alignment.Center) {
-            Text(choice.label, color = Ink.copy(alpha = .85f), fontFamily = FontFamily.Serif,
+            Text(label, color = Ink.copy(alpha = .85f), fontFamily = FontFamily.Serif,
                 fontSize = 14.sp, letterSpacing = .5.sp, textAlign = TextAlign.Center,
                 maxLines = 1)
         }
-        PickerArrow("›", "Next gong") { onSelect(choice.next()) }
+        PickerArrow("›", nextGong) { onSelect(choice.next()) }
     }
 }
 

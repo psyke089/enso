@@ -15,6 +15,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.stringResource
+import app.enso.meditation.R
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
@@ -31,28 +34,45 @@ import kotlin.math.roundToInt
 internal fun BrushSettingsPanel(settings: BrushSettings, onChange: (BrushSettings) -> Unit, onClose: () -> Unit) {
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
+    val copyLabel = stringResource(R.string.brush_copy_values)
+    val appName = stringResource(R.string.app_name)
+    val copiedLabel = stringResource(R.string.brush_copied)
     BackHandler(onBack = onClose)
     fun change(next: BrushSettings) { copied = false; onChange(next.normalized()) }
+    val width = stringResource(R.string.brush_width)
+    val inkFlow = stringResource(R.string.brush_ink_flow)
+    val inkReach = stringResource(R.string.brush_ink_reach)
+    val bristles = stringResource(R.string.brush_bristles)
+    val drag = stringResource(R.string.brush_drag)
+    val speed = stringResource(R.string.brush_speed)
+    val smoothing = stringResource(R.string.brush_smoothing)
+    val numberLocale = LocalConfiguration.current.locales[0]
     val controls = listOf(
-        BrushControl("Width", "${settings.width.roundToInt()} dp", settings.width, 16f..80f, 63) {
+        BrushControl(width, stringResource(R.string.brush_dp, settings.width.roundToInt()),
+            settings.width, 16f..80f, 63) {
             change(settings.copy(width = it.roundToInt().toFloat()))
         },
-        BrushControl("Ink flow", "${(settings.flow * 100).roundToInt()}%", settings.flow, .2f..1.8f, 31) {
+        BrushControl(inkFlow, stringResource(R.string.brush_percent, (settings.flow * 100).roundToInt()),
+            settings.flow, .2f..1.8f, 31) {
             change(settings.copy(flow = (it * 20).roundToInt() / 20f))
         },
-        BrushControl("Ink reach", String.format(Locale.ROOT, "%.2f circles", settings.inkReach), settings.inkReach, .25f..3f, 54) {
+        BrushControl(inkReach, stringResource(R.string.brush_circles, formatNumber(settings.inkReach, "%.2f", numberLocale)),
+            settings.inkReach, .25f..3f, 54) {
             change(settings.copy(inkReach = (it * 20).roundToInt() / 20f))
         },
-        BrushControl("Bristles", "${settings.bristles}", settings.bristles.toFloat(), 24f..144f, 19) {
+        BrushControl(bristles, settings.bristles.toString(), settings.bristles.toFloat(), 24f..144f, 19) {
             change(settings.copy(bristles = (it / 6).roundToInt() * 6))
         },
-        BrushControl("Bristle drag", "${(settings.drag * 100).roundToInt()}%", settings.drag, 0f..2f, 19) {
+        BrushControl(drag, stringResource(R.string.brush_percent, (settings.drag * 100).roundToInt()),
+            settings.drag, 0f..2f, 19) {
             change(settings.copy(drag = (it * 10).roundToInt() / 10f))
         },
-        BrushControl("Speed influence", "${(settings.speed * 100).roundToInt()}%", settings.speed, 0f..2f, 19) {
+        BrushControl(speed, stringResource(R.string.brush_percent, (settings.speed * 100).roundToInt()),
+            settings.speed, 0f..2f, 19) {
             change(settings.copy(speed = (it * 10).roundToInt() / 10f))
         },
-        BrushControl("Smoothing", String.format(Locale.ROOT, "%.1f dp", settings.smoothing), settings.smoothing, 0f..10f, 49) {
+        BrushControl(smoothing, stringResource(R.string.brush_dp_text, formatNumber(settings.smoothing, "%.1f", numberLocale)),
+            settings.smoothing, 0f..10f, 49) {
             change(settings.copy(smoothing = (it * 5).roundToInt() / 5f))
         },
     )
@@ -65,7 +85,7 @@ internal fun BrushSettingsPanel(settings: BrushSettings, onChange: (BrushSetting
         WashiBackground(Modifier.matchParentSize())
         Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 24.dp, vertical = 6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                InkPainterIcon(PainterSymbol.Close, "Close brush settings", onClick = onClose)
+                InkPainterIcon(PainterSymbol.Close, stringResource(R.string.close_brush_settings), onClick = onClose)
             }
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 if (maxWidth > maxHeight) {
@@ -81,24 +101,29 @@ internal fun BrushSettingsPanel(settings: BrushSettings, onChange: (BrushSetting
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TextButton(onClick = { change(BrushSettings()) }) { Text("Defaults") }
+                TextButton(onClick = { change(BrushSettings()) }) { Text(stringResource(R.string.brush_defaults)) }
                 TextButton(onClick = {
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("Enso brush", settings.description()))
+                    clipboard.setPrimaryClip(ClipData.newPlainText(appName,
+                        settings.description(context)))
                     copied = true
-                }, modifier = Modifier.semantics { contentDescription = "Copy brush values" }) {
-                    Text(if (copied) "Copied" else "Copy values")
+                }, modifier = Modifier.semantics { contentDescription = copyLabel }) {
+                    Text(if (copied) copiedLabel else copyLabel)
                 }
             }
         }
     }
 }
 
+private fun formatNumber(value: Float, pattern: String, locale: Locale): String =
+    String.format(locale, pattern, value)
+
 private data class BrushControl(val label: String, val valueLabel: String, val value: Float,
     val range: ClosedFloatingPointRange<Float>, val steps: Int, val change: (Float) -> Unit)
 
 @Composable
 private fun BrushSlider(control: BrushControl, modifier: Modifier) {
+    val description = stringResource(R.string.brush_slider, control.label)
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.Center) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically) {
@@ -110,6 +135,6 @@ private fun BrushSlider(control: BrushControl, modifier: Modifier) {
                 activeTrackColor = FadedInk.copy(alpha = .65f),
                 inactiveTrackColor = FadedInk.copy(alpha = .16f),
                 activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent),
-            modifier = Modifier.fillMaxWidth().height(38.dp).semantics { contentDescription = "Brush ${control.label}" })
+            modifier = Modifier.fillMaxWidth().height(38.dp).semantics { contentDescription = description })
     }
 }

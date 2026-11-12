@@ -1587,3 +1587,11 @@ drawing view automatically. Close/Back and restore-standard dismiss this invitat
 local day; saving satisfies it. No additional skip control is shown. On launch the splash mark
 fades into the drawing canvas rather than briefly showing the timer controls first. Returning to
 the app on a new day checks again; crossing midnight while using the app does not interrupt it.
+
+# Localization
+
+The default UI language is English. Provide a complete German translation in `values-de` and use
+the system/app locale selected by Android; all visible labels, accessibility descriptions,
+notifications, gong names and sayings must follow that locale. Keep the English resources complete
+so unsupported locales fall back safely. Declare English and German in the Android locale
+configuration for per-app language settings on Android 13 and later.

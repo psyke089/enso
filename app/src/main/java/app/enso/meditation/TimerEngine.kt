@@ -53,7 +53,7 @@ data class TimerUiState(
     val settings: EnsoSettings = EnsoSettings(),
     val continuous: Boolean = false,
     val storageWarning: Boolean = false,
-    val saying: String = "",
+    val sayingIndex: Int = -1,
     val repeatCount: Int = 1,
     val completedIntervals: Long = 0,
     val totalMs: Long? = DEFAULT_DURATION,
@@ -183,7 +183,7 @@ class TimerEngine(snapshot: TimerSnapshot = TimerSnapshot(), nowMs: Long = 0) {
                 else -> TimerPhase.Running },
             settings = snapshot.settings,
             continuous = continuous,
-            saying = Sayings.all.getOrNull(snapshot.sayingIndex).orEmpty(),
+            sayingIndex = snapshot.sayingIndex,
             repeatCount = count,
             completedIntervals = session?.completedIntervals ?: 0,
             totalMs = total,
@@ -200,8 +200,8 @@ fun normalizeDuration(value: Long): Long =
 
 fun formatTime(milliseconds: Long): String {
     val seconds = (milliseconds.coerceAtLeast(0) + 999) / 1000
-    return if (seconds >= 3600) String.format(Locale.ROOT, "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
-    else String.format(Locale.ROOT, "%02d:%02d", seconds / 60, seconds % 60)
+    return if (seconds >= 3600) String.format(Locale.getDefault(), "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60)
+    else String.format(Locale.getDefault(), "%02d:%02d", seconds / 60, seconds % 60)
 }
 
 private fun normalizeSettings(settings: EnsoSettings) = settings.copy(

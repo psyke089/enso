@@ -1,7 +1,7 @@
 package app.enso.meditation.ui
 
 import android.content.Context
-import java.util.Locale
+import app.enso.meditation.R
 
 /** Experimental brush controls, separate from timer preferences and temporary drawings. */
 internal data class BrushSettings(
@@ -20,11 +20,15 @@ internal data class BrushSettings(
         smoothing = smoothing.safe(0f..10f, 5f),
     )
 
-    fun description(): String = String.format(Locale.ROOT,
-        "Enso brush\nWidth: %.0f dp\nInk flow: %.0f%%\nInk reach: %.2f circles\n" +
-            "Bristles: %d\nBristle drag: %.0f%%\nSpeed influence: %.0f%%\nSmoothing: %.1f dp",
-        width, flow * 100, inkReach, bristles, drag * 100, speed * 100, smoothing)
+    fun description(context: Context): String = context.getString(R.string.brush_description,
+        format(context, "%.0f", width), format(context, "%.0f", flow * 100),
+        format(context, "%.2f", inkReach), bristles.toString(),
+        format(context, "%.0f", drag * 100), format(context, "%.0f", speed * 100),
+        format(context, "%.1f", smoothing))
 }
+
+private fun format(context: Context, pattern: String, value: Float): String =
+    String.format(context.resources.configuration.locales[0], pattern, value)
 
 private fun Float.safe(range: ClosedFloatingPointRange<Float>, fallback: Float) =
     if (isFinite()) coerceIn(range) else fallback

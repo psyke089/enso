@@ -2,6 +2,8 @@ package app.enso.meditation
 
 import android.view.WindowManager
 import androidx.activity.compose.setContent
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.ui.test.*
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -28,6 +30,15 @@ class EnsoSmokeTest {
     private val state get() = controller.state.value
     private fun awaitState(test: (TimerUiState) -> Boolean) = compose.waitUntil(5_000) { test(state) }
 
+    private fun str(@StringRes id: Int, vararg args: Any): String =
+        compose.activity.getString(id, *args)
+
+    private fun quantity(@PluralsRes id: Int, count: Int, vararg args: Any): String =
+        compose.activity.resources.getQuantityString(id, count, *args)
+
+    private fun saying(index: Int): String =
+        compose.activity.resources.getStringArray(R.array.sayings).getOrNull(index).orEmpty()
+
     private var savedArtworkDates: Pair<Long?, Long?>? = null
 
     @Before fun dismissDailyPromptForControlTests() {
@@ -36,11 +47,11 @@ class EnsoSmokeTest {
             (if (preferences.contains("last_dismissed_at")) preferences.getLong("last_dismissed_at", 0L) else null)
         awaitState { it.ready }
         compose.waitUntil(5_000) {
-            compose.onAllNodesWithContentDescription("Close painting").fetchSemanticsNodes().isNotEmpty() ||
-                compose.onAllNodesWithContentDescription("Paint an Enso").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithContentDescription(str(R.string.close_painting)).fetchSemanticsNodes().isNotEmpty() ||
+                compose.onAllNodesWithContentDescription(str(R.string.paint_enso)).fetchSemanticsNodes().isNotEmpty()
         }
-        if (compose.onAllNodesWithContentDescription("Close painting").fetchSemanticsNodes().isNotEmpty()) {
-            compose.onNodeWithContentDescription("Close painting").performClick()
+        if (compose.onAllNodesWithContentDescription(str(R.string.close_painting)).fetchSemanticsNodes().isNotEmpty()) {
+            compose.onNodeWithContentDescription(str(R.string.close_painting)).performClick()
         }
         compose.waitForIdle()
     }
@@ -54,30 +65,41 @@ class EnsoSmokeTest {
         }
     }
 
+    @Test fun sayingsArraysMatchEngineCountInSupportedLocales() {
+        for (language in listOf("en", "de")) {
+            val configuration = android.content.res.Configuration(compose.activity.resources.configuration)
+                .apply { setLocale(java.util.Locale(language)) }
+            val localized = compose.activity.createConfigurationContext(configuration).resources
+            val sayings = localized.getStringArray(R.array.sayings)
+            assertEquals("Unexpected saying count for $language", Sayings.count, sayings.size)
+            assertTrue("Sayings must not be blank for $language", sayings.all { it.isNotBlank() })
+        }
+    }
+
     @Test fun dailyDrawingPromptHonorsCloseAndReturnsTheNextDay() {
         val preferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
         val store = app.enso.meditation.ui.EnsoImageStore(compose.activity)
         preferences.edit().putLong("last_drawn_at", 0L).putLong("last_dismissed_at", 0L).commit()
         compose.activityRule.scenario.recreate()
         compose.waitUntil(5_000) {
-            compose.onAllNodesWithContentDescription("Close painting").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithContentDescription(str(R.string.close_painting)).fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithContentDescription("Close painting").performClick()
+        compose.onNodeWithContentDescription(str(R.string.close_painting)).performClick()
         compose.waitForIdle()
         assertFalse(store.shouldPromptToday())
         assertFalse(store.wasDrawnToday())
         compose.activityRule.scenario.recreate()
-        compose.onNodeWithContentDescription("Paint an Enso").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Close painting").assertDoesNotExist()
+        compose.onNodeWithContentDescription(str(R.string.paint_enso)).assertIsDisplayed()
+        compose.onNodeWithContentDescription(str(R.string.close_painting)).assertDoesNotExist()
         val tomorrow = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, 1) }
         assertTrue(store.shouldPromptToday(tomorrow.timeInMillis))
         val yesterday = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, -1) }
         preferences.edit().putLong("last_dismissed_at", yesterday.timeInMillis).commit()
         compose.activityRule.scenario.recreate()
         compose.waitUntil(5_000) {
-            compose.onAllNodesWithContentDescription("Close painting").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithContentDescription(str(R.string.close_painting)).fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithContentDescription("Close painting").performClick()
+        compose.onNodeWithContentDescription(str(R.string.close_painting)).performClick()
     }
 
     @Test fun repetitionSelectionAndSessionPersistWithoutChangingGongSettings() {
@@ -92,26 +114,25 @@ class EnsoSmokeTest {
                 controller.adjustRepetitions(if (before > 2) -1 else 1)
                 awaitState { it.repeatCount != before }
             }
-            compose.onNodeWithContentDescription("Increase repetitions").performClick()
+            compose.onNodeWithContentDescription(str(R.string.increase_repetitions)).performClick()
             awaitState { it.repeatCount == 3 }
-            compose.onNodeWithContentDescription("Decrease repetitions").performClick()
+            compose.onNodeWithContentDescription(str(R.string.decrease_repetitions)).performClick()
             awaitState { it.repeatCount == 2 }
-            repeat(2) { compose.onNodeWithContentDescription("Decrease repetitions").performClick() }
+            repeat(2) { compose.onNodeWithContentDescription(str(R.string.decrease_repetitions)).performClick() }
             awaitState { it.continuous && it.totalMs == null }
-            compose.onNodeWithContentDescription("Unlimited duration").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Unlimited repetitions (0)").assertIsDisplayed()
-            repeat(2) { compose.onNodeWithContentDescription("Increase repetitions").performClick() }
+            compose.onNodeWithContentDescription(str(R.string.unlimited_repetitions)).assertIsDisplayed()
+            repeat(2) { compose.onNodeWithContentDescription(str(R.string.increase_repetitions)).performClick() }
             awaitState { !it.continuous && it.totalMs == 2 * it.selectedMs }
             assertEquals(original.settings, state.settings)
             val saved = runBlocking { EnsoStore(compose.activity).load() }
             assertEquals(2, saved.repeatCount)
             assertFalse(saved.repeatForever)
-            compose.onNodeWithContentDescription("Start").performClick()
+            compose.onNodeWithContentDescription(str(R.string.action_start)).performClick()
             awaitState { it.phase == TimerPhase.Running }
-            compose.onNodeWithContentDescription("Increase repetitions").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Timer circle").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Interval 1 of 2").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Pause").performClick()
+            compose.onNodeWithContentDescription(str(R.string.increase_repetitions)).assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.timer_circle)).assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.interval_of, 1, 2)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.action_pause)).performClick()
             awaitState { it.phase == TimerPhase.Paused }
             val paused = state
             val pausedSnapshot = runBlocking { EnsoStore(compose.activity).load() }
@@ -119,10 +140,10 @@ class EnsoSmokeTest {
             assertEquals(0L, pausedSnapshot.session.completedIntervals)
             assertEquals(paused.remainingMs, pausedSnapshot.session.pausedRemainingMs)
             compose.activityRule.scenario.recreate()
-            compose.onNodeWithContentDescription("Interval 1 of 2").assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.interval_of, 1, 2)).assertIsDisplayed()
             assertEquals(paused.elapsedMs, state.elapsedMs)
             assertEquals(paused.progress, state.progress, 0f)
-            compose.onNodeWithContentDescription("Reset").performClick()
+            compose.onNodeWithContentDescription(str(R.string.action_reset)).performClick()
             awaitState { it.phase == TimerPhase.Idle }
             assertEquals(2, state.repeatCount)
             assertNull(runBlocking { EnsoStore(compose.activity).load() }.session)
@@ -145,102 +166,99 @@ class EnsoSmokeTest {
         val original = state
         try {
             controller.changeSettings { it.copy(showSaying = true, rotationStepMinutes = 5, showTime = true, hapticFeedback = true) }
-            awaitState { it.settings.showSaying && it.settings.showTime && it.settings.hapticFeedback && it.settings.rotationStepMinutes == 5 && it.saying.isNotEmpty() }
+            awaitState { it.settings.showSaying && it.settings.showTime && it.settings.hapticFeedback && it.settings.rotationStepMinutes == 5 && it.sayingIndex >= 0 }
             compose.waitUntil(5_000) {
-                runCatching { compose.onNodeWithText(state.saying).assertIsDisplayed() }.isSuccess
+                runCatching { compose.onNodeWithText(saying(state.sayingIndex)).assertIsDisplayed() }.isSuccess
             }
             val direction = if (state.selectedMs == MAX_DURATION) -1 else 1
-            val forward = if (direction > 0) "Increase" else "Decrease"
-            val backward = if (direction > 0) "Decrease" else "Increase"
-            adjustDurationAccessibly(forward)
+            adjustDurationAccessibly(increase = direction > 0)
             awaitState { it.selectedMs == original.selectedMs + direction * DURATION_STEP }
-            adjustDurationAccessibly(backward)
+            adjustDurationAccessibly(increase = direction < 0)
             awaitState { it.selectedMs == original.selectedMs }
 
-            compose.onNodeWithContentDescription("Settings").performClick()
-            compose.onNodeWithText("Minutes per step").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Smaller minute step").performClick()
+            compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
+            compose.onNodeWithText(str(R.string.minutes_per_step)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.smaller_minute_step)).performClick()
             awaitState { it.settings.rotationStepMinutes == 2 }
             assertEquals(2, runBlocking { EnsoStore(compose.activity).load() }.settings.rotationStepMinutes)
-            compose.onNodeWithText("Haptic Feedback").performScrollTo().performClick()
+            compose.onNodeWithText(str(R.string.haptic_feedback)).performScrollTo().performClick()
             awaitState { !it.settings.hapticFeedback }
             assertFalse(runBlocking { EnsoStore(compose.activity).load() }.settings.hapticFeedback)
             compose.activityRule.scenario.recreate()
             awaitState { !it.settings.hapticFeedback }
-            compose.onNodeWithText("Haptic Feedback").performScrollTo().performClick()
+            compose.onNodeWithText(str(R.string.haptic_feedback)).performScrollTo().performClick()
             awaitState { it.settings.hapticFeedback }
-            compose.onNodeWithContentDescription("2 minutes per rotation step").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Larger minute step").performClick()
+            compose.onNodeWithContentDescription(quantity(R.plurals.minutes_per_rotation_step, 2, 2)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.larger_minute_step)).performClick()
             awaitState { it.settings.rotationStepMinutes == 5 }
-            compose.onNodeWithText("Vibration").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Close settings").assertIsDisplayed()
+            compose.onNodeWithText(str(R.string.vibration)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.close_settings)).assertIsDisplayed()
             // Tap the label itself; the merged row's center overlaps the sound-preview control.
-            compose.onNodeWithText("Repeat Gong", useUnmergedTree = true).performClick()
+            compose.onNodeWithText(str(R.string.repeat_gong), useUnmergedTree = true).performClick()
             awaitState { it.settings.repeatGong != original.settings.repeatGong }
             assertEquals(original.repeatCount, state.repeatCount)
             assertEquals(original.continuous, state.continuous)
-            compose.onNodeWithText("Show Time").performScrollTo().performClick()
+            compose.onNodeWithText(str(R.string.show_time)).performScrollTo().performClick()
             awaitState { !it.settings.showTime }
             assertFalse(runBlocking { EnsoStore(compose.activity).load() }.settings.showTime)
             compose.activityRule.scenario.recreate()
             awaitState { !it.settings.showTime }
-            compose.onNodeWithContentDescription("Close settings").performClick()
-            compose.onNodeWithContentDescription("${formatTime(state.selectedMs)} selected").assertDoesNotExist()
-            compose.onNodeWithContentDescription(if (state.continuous) "Unlimited repetitions (0)"
-                else "${state.repeatCount} repetitions").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Settings").performClick()
-            compose.onNodeWithText("Show Time").performScrollTo().performClick()
+            compose.onNodeWithContentDescription(str(R.string.close_settings)).performClick()
+            compose.onNodeWithContentDescription(str(R.string.time_selected, formatTime(state.selectedMs))).assertDoesNotExist()
+            compose.onNodeWithContentDescription(if (state.continuous) str(R.string.unlimited_repetitions)
+                else quantity(R.plurals.repetitions, state.repeatCount, state.repeatCount)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
+            compose.onNodeWithText(str(R.string.show_time)).performScrollTo().performClick()
             awaitState { it.settings.showTime }
-            compose.onNodeWithText("Show Saying").performScrollTo().performClick()
+            compose.onNodeWithText(str(R.string.show_saying)).performScrollTo().performClick()
             awaitState { !it.settings.showSaying }
-            compose.onNodeWithText("Vibration").performClick()
+            compose.onNodeWithText(str(R.string.vibration)).performClick()
             awaitState { it.settings.vibration != original.settings.vibration }
             val saved = runBlocking { EnsoStore(compose.activity).load() }
             assertEquals(state.settings, saved.settings)
             assertEquals(state.selectedMs, saved.selectedMs)
-            compose.onNodeWithContentDescription("Close settings").performClick()
-            compose.onNodeWithText(state.saying).assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.close_settings)).performClick()
+            compose.onNodeWithText(saying(state.sayingIndex)).assertDoesNotExist()
 
-            compose.onNodeWithContentDescription("Start").performClick()
+            compose.onNodeWithContentDescription(str(R.string.action_start)).performClick()
             awaitState { it.phase == TimerPhase.Running }
-            assertNotEquals(original.saying, state.saying)
-            val runningSaying = state.saying
+            assertNotEquals(original.sayingIndex, state.sayingIndex)
+            val runningSaying = state.sayingIndex
             val running = state.remainingMs
-            compose.onNodeWithContentDescription("Timer circle").assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.timer_circle)).assertDoesNotExist()
             compose.activityRule.scenario.recreate()
             awaitState { it.phase == TimerPhase.Running && it.remainingMs < running }
             assertEquals(original.selectedMs, state.selectedMs)
-            assertEquals(runningSaying, state.saying)
+            assertEquals(runningSaying, state.sayingIndex)
 
-            compose.onNodeWithContentDescription("Pause").performClick()
+            compose.onNodeWithContentDescription(str(R.string.action_pause)).performClick()
             awaitState { it.phase == TimerPhase.Paused }
-            assertEquals(runningSaying, state.saying)
+            assertEquals(runningSaying, state.sayingIndex)
             val paused = state.remainingMs
-            compose.onNodeWithText("Paused").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Session progress").assertDoesNotExist()
-            val timeDescription = if (state.totalMs == null)
-                "${formatTime(state.elapsedMs / 1000 * 1000)} elapsed, unlimited duration"
-                else "${formatTime(state.elapsedMs / 1000 * 1000)} elapsed, ${formatTime(state.totalMs!!)} total duration"
-            if (state.continuous) compose.onNodeWithContentDescription(timeDescription).assertDoesNotExist()
-            else compose.onNodeWithContentDescription(timeDescription).assertIsDisplayed()
-            compose.onNodeWithContentDescription("Timer circle").assertDoesNotExist()
+            compose.onNodeWithText(str(R.string.paused)).assertDoesNotExist()
+            // A continuous session has no bounded total, so no elapsed/total description is shown.
+            state.totalMs?.let { total ->
+                compose.onNodeWithContentDescription(str(R.string.elapsed_total,
+                    formatTime(state.elapsedMs / 1000 * 1000), formatTime(total))).assertIsDisplayed()
+            }
+            compose.onNodeWithContentDescription(str(R.string.timer_circle)).assertDoesNotExist()
             compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
             Thread.sleep(1_100)
             assertEquals(paused, state.remainingMs)
             compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-            compose.onNodeWithContentDescription("Resume").performClick()
+            compose.onNodeWithContentDescription(str(R.string.action_resume)).performClick()
             awaitState { it.phase == TimerPhase.Running && it.remainingMs < paused }
-            assertEquals(runningSaying, state.saying)
+            assertEquals(runningSaying, state.sayingIndex)
             compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
             val beforeBackground = state.remainingMs
             Thread.sleep(1_200)
             assertTrue(state.remainingMs < beforeBackground)
             compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-            compose.onNodeWithContentDescription("Reset").performClick()
+            compose.onNodeWithContentDescription(str(R.string.action_reset)).performClick()
             awaitState { it.phase == TimerPhase.Idle }
             assertEquals(original.selectedMs, state.remainingMs)
-            compose.onNodeWithContentDescription("Start").assertIsDisplayed()
-            compose.onNodeWithContentDescription("Reset").assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.action_start)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.action_reset)).assertDoesNotExist()
             compose.runOnIdle {
                 assertEquals(0, compose.activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
@@ -253,10 +271,14 @@ class EnsoSmokeTest {
         }
     }
 
-    private fun adjustDurationAccessibly(direction: String) {
-        val actions = compose.onNodeWithContentDescription("Timer circle").fetchSemanticsNode().config[SemanticsActions.CustomActions]
+    private fun adjustDurationAccessibly(increase: Boolean) {
+        val stepMinutes = state.settings.rotationStepMinutes
+        val expected = if (increase) quantity(R.plurals.increase_duration, stepMinutes, stepMinutes)
+            else quantity(R.plurals.decrease_duration, stepMinutes, stepMinutes)
+        val actions = compose.onNodeWithContentDescription(str(R.string.timer_circle))
+            .fetchSemanticsNode().config[SemanticsActions.CustomActions]
         compose.runOnIdle {
-            assertTrue(actions.first { it.label == "$direction meditation duration by 5 minutes" }.action())
+            assertTrue(actions.first { it.label == expected }.action())
         }
     }
 
@@ -267,7 +289,7 @@ class EnsoSmokeTest {
         try {
             controller.changeSettings { it.copy(rotationStepMinutes = 5) }
             awaitState { it.settings.rotationStepMinutes == 5 }
-            val circle = compose.onNodeWithContentDescription("Timer circle")
+            val circle = compose.onNodeWithContentDescription(str(R.string.timer_circle))
             circle.performTouchInput {
                 val radius = width * .4f
                 fun point(degrees: Float): Offset {
@@ -355,16 +377,16 @@ class EnsoSmokeTest {
             controller.changeSettings { it.copy(startGong = false, endGong = false, repeatGong = false,
                 vibration = false, keepScreenAwake = false) }
             awaitState { !it.settings.startGong && !it.settings.endGong && !it.settings.repeatGong }
-            compose.onNodeWithContentDescription("Start").performClick()
+            compose.onNodeWithContentDescription(str(R.string.action_start)).performClick()
             awaitState { it.phase == TimerPhase.Running }
-            compose.waitUntil(5_000) { active()?.actions?.firstOrNull()?.title?.toString() == "Pause" }
+            compose.waitUntil(5_000) { active()?.actions?.firstOrNull()?.title?.toString() == str(R.string.action_pause) }
             val notification = active()!!
             assertEquals(android.app.Notification.VISIBILITY_PUBLIC, notification.visibility)
             assertEquals(android.app.Notification.CATEGORY_ALARM, notification.category)
             assertFalse(notification.extras.getBoolean(android.app.Notification.EXTRA_SHOW_CHRONOMETER))
             assertFalse(notification.extras.getBoolean(android.app.Notification.EXTRA_SHOW_WHEN))
             assertTrue(notification.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString().contains(":"))
-            assertEquals("Pause", notification.actions.first().title.toString())
+            assertEquals(str(R.string.action_pause), notification.actions.first().title.toString())
             if (android.os.Build.VERSION.SDK_INT >= 26) {
                 val channel = manager.getNotificationChannel(notification.channelId)
                 assertEquals(android.app.NotificationManager.IMPORTANCE_DEFAULT, channel.importance)
@@ -373,12 +395,13 @@ class EnsoSmokeTest {
             }
             notification.actions.first().actionIntent.send()
             awaitState { it.phase == TimerPhase.Paused }
-            compose.waitUntil(5_000) { active()?.actions?.firstOrNull()?.title?.toString() == "Resume" }
-            assertTrue(active()!!.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString().contains("Paused"))
-            assertEquals("Resume", active()!!.actions.first().title.toString())
+            compose.waitUntil(5_000) { active()?.actions?.firstOrNull()?.title?.toString() == str(R.string.action_resume) }
+            assertTrue(active()!!.extras.getCharSequence(android.app.Notification.EXTRA_TEXT).toString()
+                .contains(str(R.string.paused)))
+            assertEquals(str(R.string.action_resume), active()!!.actions.first().title.toString())
             active()!!.actions.first().actionIntent.send()
             awaitState { it.phase == TimerPhase.Running }
-            compose.waitUntil(5_000) { active()?.actions?.firstOrNull()?.title?.toString() == "Pause" }
+            compose.waitUntil(5_000) { active()?.actions?.firstOrNull()?.title?.toString() == str(R.string.action_pause) }
             active()!!.actions[1].actionIntent.send()
             awaitState { it.phase == TimerPhase.Idle }
             compose.waitUntil(5_000) { active() == null }
@@ -423,43 +446,41 @@ class EnsoSmokeTest {
         val store = app.enso.meditation.ui.BrushSettingsStore(compose.activity)
         val original = store.load()
         try {
-            compose.onNodeWithContentDescription("Paint an Enso").performClick()
-            compose.onNodeWithContentDescription("Brush settings").performClick()
-            compose.onNodeWithText("Brush").assertDoesNotExist()
-            compose.onNodeWithText("Changes apply to your next stroke.").assertDoesNotExist()
-            compose.onNodeWithContentDescription("Brush Width").performSemanticsAction(SemanticsActions.SetProgress) {
-                assertTrue(it(70f))
-            }
-            compose.onNodeWithContentDescription("Brush Ink reach").performSemanticsAction(SemanticsActions.SetProgress) {
-                assertTrue(it(2f))
-            }
+            compose.onNodeWithContentDescription(str(R.string.paint_enso)).performClick()
+            compose.onNodeWithContentDescription(str(R.string.brush_settings)).performClick()
+            compose.onNodeWithText(str(R.string.brush_settings)).assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.brush_slider, str(R.string.brush_width)))
+                .performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(70f)) }
+            compose.onNodeWithContentDescription(str(R.string.brush_slider, str(R.string.brush_ink_reach)))
+                .performSemanticsAction(SemanticsActions.SetProgress) { assertTrue(it(2f)) }
             compose.runOnIdle {
                 assertEquals(70f, store.load().width, .001f)
                 assertEquals(2f, store.load().inkReach, .001f)
             }
-            compose.onNodeWithContentDescription("Copy brush values").performClick()
+            compose.onNodeWithContentDescription(str(R.string.brush_copy_values)).performClick()
             compose.runOnIdle {
                 val clipboard = compose.activity.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                assertEquals(store.load().description(), clipboard.primaryClip!!.getItemAt(0).text.toString())
+                assertEquals(store.load().description(compose.activity), clipboard.primaryClip!!.getItemAt(0).text.toString())
             }
-            compose.onNodeWithContentDescription("Close brush settings").performClick()
-            compose.onNodeWithContentDescription("Enso painting canvas").assert(
-                SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Empty canvas"))
-            compose.onNodeWithContentDescription("Close painting").performClick()
+            compose.onNodeWithContentDescription(str(R.string.close_brush_settings)).performClick()
+            compose.onNodeWithContentDescription(str(R.string.painting_canvas)).assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, str(R.string.empty_canvas)))
+            compose.onNodeWithContentDescription(str(R.string.close_painting)).performClick()
             compose.activityRule.scenario.recreate()
             awaitState { it.ready }
-            compose.onNodeWithContentDescription("Paint an Enso").performClick()
-            compose.onNodeWithContentDescription("Brush settings").performClick()
-            compose.onNodeWithContentDescription("Brush Width").assert(SemanticsMatcher("Retained width") {
+            compose.onNodeWithContentDescription(str(R.string.paint_enso)).performClick()
+            compose.onNodeWithContentDescription(str(R.string.brush_settings)).performClick()
+            compose.onNodeWithContentDescription(str(R.string.brush_slider, str(R.string.brush_width))).assert(SemanticsMatcher("Retained width") {
                 it.config[SemanticsProperties.ProgressBarRangeInfo].current == 70f
             })
-            compose.onNodeWithText("Defaults").performClick()
+            compose.onNodeWithText(str(R.string.brush_defaults)).performClick()
             compose.runOnIdle { assertEquals(app.enso.meditation.ui.BrushSettings(), store.load()) }
-            compose.onNodeWithContentDescription("Close brush settings").performClick()
-            compose.onNodeWithContentDescription("Close painting").performClick()
-            compose.onNodeWithContentDescription("Settings").performClick()
-            compose.onNodeWithContentDescription("App version ${BuildConfig.VERSION_NAME}").performScrollTo().assertIsDisplayed()
-            compose.onNodeWithContentDescription("Close settings").performScrollTo().performClick()
+            compose.onNodeWithContentDescription(str(R.string.close_brush_settings)).performClick()
+            compose.onNodeWithContentDescription(str(R.string.close_painting)).performClick()
+            compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
+            compose.onNodeWithContentDescription(str(R.string.app_version, BuildConfig.VERSION_NAME))
+                .performScrollTo().assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.close_settings)).performScrollTo().performClick()
         } finally { store.save(original) }
     }
 
@@ -476,14 +497,14 @@ class EnsoSmokeTest {
                 compose.onAllNodesWithTag("Timer artwork frame").fetchSemanticsNodes().isNotEmpty()
             }
             val bounds = compose.onNodeWithTag("Timer artwork frame").fetchSemanticsNode().boundsInRoot
-            compose.onNodeWithContentDescription("Paint an Enso").performClick()
-            val canvas = compose.onNodeWithContentDescription("Enso painting canvas")
+            compose.onNodeWithContentDescription(str(R.string.paint_enso)).performClick()
+            val canvas = compose.onNodeWithContentDescription(str(R.string.painting_canvas))
             val paintBounds = canvas.fetchSemanticsNode().boundsInRoot
             assertEquals(bounds.center.x, paintBounds.center.x, 1f)
             assertEquals(bounds.center.y, paintBounds.center.y, 1f)
             assertTrue(paintBounds.width >= bounds.width)
             assertEquals(paintBounds.width, paintBounds.height, 1f)
-            compose.onNodeWithContentDescription("Save and use painted Enso").assertIsNotEnabled()
+            compose.onNodeWithContentDescription(str(R.string.save_painted_enso)).assertIsNotEnabled()
             canvas.performTouchInput {
                 val radius = bounds.width * app.enso.meditation.ui.ENSO_GUIDE_RADIUS
                 fun point(degrees: Int): Offset {
@@ -494,13 +515,13 @@ class EnsoSmokeTest {
                 for (degrees in -115..200 step 5) moveTo(point(degrees), 16)
                 up()
             }
-            compose.onNodeWithContentDescription("Save and use painted Enso").performClick()
+            compose.onNodeWithContentDescription(str(R.string.save_painted_enso)).performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty() }
             assertTrue(imageStore.wasDrawnToday())
             val tomorrow = java.util.Calendar.getInstance().apply { add(java.util.Calendar.DAY_OF_YEAR, 1) }
             assertFalse(imageStore.wasDrawnToday(tomorrow.timeInMillis))
-            compose.onNodeWithContentDescription("Paint an Enso").assert(
-                SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Enso drawn today"))
+            compose.onNodeWithContentDescription(str(R.string.paint_enso)).assert(
+                SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, str(R.string.enso_drawn_today)))
             val first = imageStore.load()!!
             assertEquals(paintBounds.width.toInt(), first.width)
             assertEquals(first.width, first.height)
@@ -514,13 +535,13 @@ class EnsoSmokeTest {
             awaitState { it.ready }
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty() }
             assertTrue(first.sameAs(imageStore.load()))
-            compose.onNodeWithContentDescription("Paint an Enso").performClick()
+            compose.onNodeWithContentDescription(str(R.string.paint_enso)).performClick()
             canvas.performTouchInput { click(center) }
-            compose.onNodeWithContentDescription("Save and use painted Enso").performClick()
+            compose.onNodeWithContentDescription(str(R.string.save_painted_enso)).performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty() }
             assertFalse("Saving again must replace the single image", first.sameAs(imageStore.load()))
-            compose.onNodeWithContentDescription("Paint an Enso").performClick()
-            compose.onNodeWithContentDescription("Use standard Enso").performClick()
+            compose.onNodeWithContentDescription(str(R.string.paint_enso)).performClick()
+            compose.onNodeWithContentDescription(str(R.string.use_standard_enso)).performClick()
             compose.waitUntil(5_000) { compose.onAllNodesWithTag("Standard Enso artwork").fetchSemanticsNodes().isNotEmpty() }
             assertNull(imageStore.load())
             assertFalse(imageStore.shouldPromptToday())
@@ -537,10 +558,10 @@ class EnsoSmokeTest {
     @Test fun paintingIsTemporaryAndResetClearsOnlyTheDrawing() {
         awaitState { it.ready }
         val original = state
-        compose.onNodeWithContentDescription("Paint an Enso").performClick()
-        val canvas = compose.onNodeWithContentDescription("Enso painting canvas")
+        compose.onNodeWithContentDescription(str(R.string.paint_enso)).performClick()
+        val canvas = compose.onNodeWithContentDescription(str(R.string.painting_canvas))
         canvas.assertIsDisplayed()
-        compose.onNodeWithContentDescription("Start").assertDoesNotExist()
+        compose.onNodeWithContentDescription(str(R.string.action_start)).assertDoesNotExist()
         val blank = canvas.captureToImage().asAndroidBitmap()
         canvas.performTouchInput {
             val radius = minOf(width, height) * .34f
@@ -552,22 +573,23 @@ class EnsoSmokeTest {
             for (degrees in -115..200 step 5) moveTo(point(degrees), 16)
             up()
         }
-        canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "1 brush stroke"))
+        canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription,
+            quantity(R.plurals.brush_strokes, 1, 1)))
         assertFalse("Finger painting must produce ink on the paper", blank.sameAs(canvas.captureToImage().asAndroidBitmap()))
-        compose.onNodeWithContentDescription("Reset painting").performClick()
-        canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Empty canvas"))
+        compose.onNodeWithContentDescription(str(R.string.reset_painting)).performClick()
+        canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, str(R.string.empty_canvas)))
         assertTrue("Reset must leave the original paper", blank.sameAs(canvas.captureToImage().asAndroidBitmap()))
         canvas.performTouchInput { click(center) }
-        compose.onNodeWithContentDescription("Close painting").performClick()
-        compose.onNodeWithContentDescription("Enso painting canvas").assertDoesNotExist()
+        compose.onNodeWithContentDescription(str(R.string.close_painting)).performClick()
+        compose.onNodeWithContentDescription(str(R.string.painting_canvas)).assertDoesNotExist()
         assertEquals(original.selectedMs, state.selectedMs)
         assertEquals(original.repeatCount, state.repeatCount)
         assertEquals(original.continuous, state.continuous)
         assertEquals(original.settings, state.settings)
-        compose.onNodeWithContentDescription("Paint an Enso").performClick()
-        canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Empty canvas"))
+        compose.onNodeWithContentDescription(str(R.string.paint_enso)).performClick()
+        canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, str(R.string.empty_canvas)))
         androidx.test.espresso.Espresso.pressBack()
-        compose.onNodeWithContentDescription("Enso painting canvas").assertDoesNotExist()
+        compose.onNodeWithContentDescription(str(R.string.painting_canvas)).assertDoesNotExist()
     }
 
 }

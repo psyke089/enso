@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.draw.rotate
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -53,6 +55,7 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
     val density = LocalDensity.current.density
     val brush = remember { SumiBrush() }
     val context = LocalContext.current
+    val saveError = stringResource(R.string.save_error)
     val store = remember(context) { BrushSettingsStore(context) }
     var settings by remember { mutableStateOf(store.load()) }
     val currentSettings by rememberUpdatedState(settings)
@@ -76,7 +79,7 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
                     onSave(bitmap)
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { error = "Could not save the Enso. Please try again." }
+            catch (_: Exception) { error = saveError }
             finally { saving = false }
         }
     }
@@ -93,21 +96,20 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
         Row(Modifier.zIndex(1f).fillMaxWidth().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
-            InkPainterIcon(PainterSymbol.Close, "Close painting", enabled = !busy, onClick = onClose)
-            InkPainterIcon(PainterSymbol.Brush, "Brush settings", enabled = !busy) { brushSettingsOpen = true }
-            InkAction("Reset painting", R.drawable.ink_reset, enabled = strokes.isNotEmpty() && !busy && !drawing,
+            InkPainterIcon(PainterSymbol.Close, stringResource(R.string.close_painting), enabled = !busy, onClick = onClose)
+            InkPainterIcon(PainterSymbol.Brush, stringResource(R.string.brush_settings), enabled = !busy) { brushSettingsOpen = true }
+            InkAction(stringResource(R.string.reset_painting), R.drawable.ink_reset, enabled = strokes.isNotEmpty() && !busy && !drawing,
                 secondary = true) { strokes.clear() }
         }
+        val canvasDescription = stringResource(R.string.painting_canvas)
+        val strokesDescription = if (strokes.isEmpty()) stringResource(R.string.empty_canvas)
+            else pluralStringResource(R.plurals.brush_strokes, strokes.size, strokes.size)
         Canvas(Modifier.offset { IntOffset(artworkBounds.left.roundToInt(), artworkBounds.top.roundToInt()) }
             .wrapContentSize(Alignment.TopStart, unbounded = true).size(with(LocalDensity.current) { artworkBounds.width.toDp() },
                 with(LocalDensity.current) { artworkBounds.height.toDp() }).clipToBounds()
             .semantics {
-                contentDescription = "Enso painting canvas"
-                stateDescription = when (strokes.size) {
-                    0 -> "Empty canvas"
-                    1 -> "1 brush stroke"
-                    else -> "${strokes.size} brush strokes"
-                }
+                contentDescription = canvasDescription
+                stateDescription = strokesDescription
             }
             .pointerInput(density) {
                 awaitEachGesture {
@@ -148,8 +150,8 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
             horizontalAlignment = Alignment.CenterHorizontally) {
             error?.let { Text(it, color = Ink, fontSize = 13.sp) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                InkPainterIcon(PainterSymbol.Trash, "Use standard Enso", enabled = !busy && !drawing) { persist(true) }
-                InkPainterIcon(PainterSymbol.Apply, "Save and use painted Enso",
+                InkPainterIcon(PainterSymbol.Trash, stringResource(R.string.use_standard_enso), enabled = !busy && !drawing) { persist(true) }
+                InkPainterIcon(PainterSymbol.Apply, stringResource(R.string.save_painted_enso),
                     enabled = !busy && !drawing && strokes.isNotEmpty()) { persist(false) }
             }
         }
@@ -165,11 +167,13 @@ internal const val ENSO_GUIDE_RADIUS = .38f
 /** A small brush silhouette drawn in the same editable canvas language as the experiment. */
 @Composable
 internal fun InkPaintButton(drawnToday: Boolean = false, onClick: () -> Unit) {
+    val paintDescription = stringResource(R.string.paint_enso)
+    val drawnTodayDescription = stringResource(R.string.enso_drawn_today)
     Box(Modifier.size(44.dp).clip(CircleShape)
         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
             onClick = onClick).semantics {
-                contentDescription = "Paint an Enso"
-                if (drawnToday) stateDescription = "Enso drawn today"
+                contentDescription = paintDescription
+                if (drawnToday) stateDescription = drawnTodayDescription
                 role = Role.Button
             }, contentAlignment = Alignment.Center) {
         if (drawnToday) Image(painterResource(R.drawable.enso_brush), null,
