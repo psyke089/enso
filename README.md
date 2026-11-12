@@ -35,3 +35,5 @@ Enso is a minimal meditation timer built with Kotlin and Jetpack Compose. It run
 ## License
 
 [MIT](LICENSE)
+
+The nine bundled gong recordings in `app/src/main/res/raw` come from [Pixabay](https://pixabay.com/) and are used under the [Pixabay Content License](https://pixabay.com/service/license-summary/), which requires no attribution. The adjustment tick is generated locally by `tools/generate_adjustment_tick.py` and contains no external samples.
