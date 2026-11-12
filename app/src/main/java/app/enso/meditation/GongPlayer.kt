@@ -29,8 +29,7 @@ class GongPlayer(private val context: Context) {
 
     @Suppress("DEPRECATION")
     fun play(sound: GongChoice) {
-        val id = findResource(sound.resourceName).takeIf { it != 0 } ?: findResource("gong")
-        if (id == 0) return
+        val id = sound.soundRes
         stop()
         try {
             val granted = if (Build.VERSION.SDK_INT >= 26) {
@@ -61,9 +60,6 @@ class GongPlayer(private val context: Context) {
             stop()
         }
     }
-
-    @Suppress("DiscouragedApi")
-    private fun findResource(name: String) = context.resources.getIdentifier(name, "raw", context.packageName)
 
     @Suppress("DEPRECATION")
     fun stop() {

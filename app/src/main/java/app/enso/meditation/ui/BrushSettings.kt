@@ -36,6 +36,10 @@ private fun Float.safe(range: ClosedFloatingPointRange<Float>, fallback: Float) 
 internal class BrushSettingsStore(context: Context) {
     private val preferences = context.applicationContext.getSharedPreferences("brush_experiment", Context.MODE_PRIVATE)
 
+    fun warmUp() {
+        load()
+    }
+
     fun load(): BrushSettings {
         val defaults = BrushSettings()
         val loaded = BrushSettings(

@@ -14,7 +14,9 @@ import kotlin.math.sin
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.lifecycle.Lifecycle
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -41,6 +43,7 @@ class EnsoSmokeTest {
 
     private var savedArtworkDates: Pair<Long?, Long?>? = null
     private var savedArtworkFiles: Map<String, ByteArray?> = emptyMap()
+    private var savedSettings: EnsoSettings? = null
 
     @Before fun dismissDailyPromptForControlTests() {
         val preferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
@@ -51,6 +54,7 @@ class EnsoSmokeTest {
         savedArtworkDates = (if (preferences.contains("last_drawn_at")) preferences.getLong("last_drawn_at", 0L) else null) to
             (if (preferences.contains("last_dismissed_at")) preferences.getLong("last_dismissed_at", 0L) else null)
         awaitState { it.ready }
+        savedSettings = state.settings
         // A crashed hardcore run would otherwise hide every control these tests rely on.
         if (state.settings.hardcoreMode) {
             controller.changeSettings { it.copy(hardcoreMode = false) }
@@ -64,6 +68,18 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription(str(R.string.close_painting)).performClick()
         }
         compose.waitForIdle()
+    }
+
+    @After fun restoreSettings() {
+        val saved = savedSettings ?: return
+        if (controller.state.value.settings != saved) {
+            controller.changeSettings { saved }
+            runBlocking {
+                withTimeout(5_000) {
+                    while (controller.state.value.settings != saved) delay(10)
+                }
+            }
+        }
     }
 
     @After fun restoreArtworkDates() {
@@ -96,9 +112,10 @@ class EnsoSmokeTest {
 
     @Test fun dailyDrawingPromptHonorsCloseAndReturnsTheNextDay() {
         val preferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
-        val store = app.enso.meditation.ui.EnsoImageStore(compose.activity)
+        val store = (compose.activity.application as EnsoApplication).imageStore
         android.util.AtomicFile(java.io.File(compose.activity.filesDir, "painted_enso.dat")).delete()
         preferences.edit().putLong("last_drawn_at", 0L).putLong("last_dismissed_at", 0L).commit()
+        store.refresh()
         compose.activityRule.scenario.recreate()
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription(str(R.string.close_painting)).fetchSemanticsNodes().isNotEmpty()
@@ -255,8 +272,10 @@ class EnsoSmokeTest {
             assertEquals(runningSaying, state.sayingIndex)
             val paused = state.remainingMs
             compose.onNodeWithText(str(R.string.paused)).assertDoesNotExist()
-            // A continuous session has no bounded total, so no elapsed/total description is shown.
-            state.totalMs?.let { total ->
+            // Continuous sessions show elapsed / ∞; bounded ones show elapsed / total.
+            if (state.continuous) {
+                compose.onNodeWithText("∞", substring = true).assertIsDisplayed()
+            } else state.totalMs?.let { total ->
                 compose.onNodeWithContentDescription(str(R.string.elapsed_total,
                     formatTime(state.elapsedMs / 1000 * 1000), formatTime(total))).assertIsDisplayed()
             }
@@ -505,7 +524,7 @@ class EnsoSmokeTest {
 
     @Test fun paintedEnsoMatchesTimerBoundsAndCanReplaceAndRestoreArtwork() {
         awaitState { it.ready }
-        val imageStore = app.enso.meditation.ui.EnsoImageStore(compose.activity)
+        val imageStore = (compose.activity.application as EnsoApplication).imageStore
         val originalImage = imageStore.load()
         val originalScale = imageStore.frameScale()
         val artworkPreferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
@@ -613,7 +632,7 @@ class EnsoSmokeTest {
 
     @Test fun hardcoreModeDemandsOnePaintingPerDayAndLeavesNoWayBack() {
         awaitState { it.ready }
-        val imageStore = app.enso.meditation.ui.EnsoImageStore(compose.activity)
+        val imageStore = (compose.activity.application as EnsoApplication).imageStore
         val preferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
         val original = state.settings
         val originalImage = imageStore.load()
@@ -625,18 +644,21 @@ class EnsoSmokeTest {
             // A dismissed invitation still opens the canvas, because hardcore has no dismissal.
             preferences.edit().putLong("last_drawn_at", 0L)
                 .putLong("last_dismissed_at", System.currentTimeMillis()).commit()
+            imageStore.refresh()
             assertTrue(imageStore.shouldOpenPainter(hardcore = true))
             assertFalse(imageStore.shouldOpenPainter(hardcore = false))
 
             // An ordinary painting saved today must not swallow a new activation.
             preferences.edit().putLong("last_drawn_at", System.currentTimeMillis() - 1_000L).commit()
+            imageStore.refresh()
             assertTrue(imageStore.wasDrawnToday())
             compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
             compose.onNodeWithText(str(R.string.hardcore_mode)).performScrollTo().performClick()
             awaitState { it.settings.hardcoreMode }
             val enabledSettings = runBlocking { EnsoStore(compose.activity).load() }.settings
             assertTrue(enabledSettings.hardcoreMode)
-            assertTrue(imageStore.shouldOpenPainter(true, enabledAt = enabledSettings.hardcoreEnabledAt))
+            assertTrue(enabledSettings.hardcorePending)
+            assertTrue(imageStore.shouldOpenPainter(true, pending = enabledSettings.hardcorePending))
             compose.onNodeWithContentDescription(str(R.string.close_settings)).performScrollTo().performClick()
 
             // Closing settings hands straight over to the single canvas of the day.
@@ -672,9 +694,10 @@ class EnsoSmokeTest {
             compose.waitUntil(5_000) {
                 compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty()
             }
+            compose.waitUntil(5_000) { !state.settings.hardcorePending }
             assertTrue(imageStore.wasDrawnToday())
             assertFalse(imageStore.shouldOpenPainter(hardcore = true,
-                enabledAt = state.settings.hardcoreEnabledAt))
+                pending = state.settings.hardcorePending))
 
             // The one attempt is spent: no button, no canvas, also not after a relaunch.
             compose.onNodeWithContentDescription(str(R.string.paint_enso)).assertDoesNotExist()

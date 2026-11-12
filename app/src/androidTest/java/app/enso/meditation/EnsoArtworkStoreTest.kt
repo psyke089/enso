@@ -47,9 +47,8 @@ class EnsoArtworkStoreTest {
 
     @Test fun everyGongHasABundledRecording() {
         for (choice in GongChoice.entries) {
-            val id = base.resources.getIdentifier(choice.resourceName, "raw", base.packageName)
-            assertTrue("Missing ${choice.resourceName}", id != 0)
-            base.resources.openRawResourceFd(id).use { assertTrue(it.length > 0) }
+            assertTrue("Missing ${choice.name}", choice.soundRes != 0)
+            base.resources.openRawResourceFd(choice.soundRes).use { assertTrue(it.length > 0) }
         }
     }
 

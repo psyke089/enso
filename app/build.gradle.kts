@@ -5,8 +5,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val ensoVersionCode = 13
-val ensoVersionName = "1.6.0"
+val ensoVersionCode = 14
+val ensoVersionName = "1.7.0"
 
 // Signing stays optional so debug builds work without a local keystore.
 val keystoreProperties = Properties().apply {
@@ -45,7 +45,9 @@ android {
     buildTypes {
         release {
             optimization {
-                enable = false
+                // R8: smaller APK, faster install and startup. Gong sounds are referenced by
+                // R.raw ids, so no resource-name reflection remains.
+                enable = true
             }
             if (releaseStoreFile != null) signingConfig = signingConfigs.getByName("release")
         }

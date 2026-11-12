@@ -65,6 +65,7 @@
     <string name="time_remaining">%1$s remaining</string>
     <string name="paused">Paused</string>
     <string name="elapsed_total">%1$s elapsed, %2$s total duration</string>
+    <string name="elapsed_unlimited">%1$s elapsed, unlimited duration</string>
     <string name="total_duration">%1$s total duration</string>
 
     <string name="close_painting">Close painting</string>

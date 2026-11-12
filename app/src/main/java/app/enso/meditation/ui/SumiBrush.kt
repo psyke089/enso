@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.graphics.nativeCanvas
 import app.enso.meditation.ui.theme.Ink
 import kotlin.math.*
@@ -212,13 +213,41 @@ private fun random(index: Int, seed: Int): Float {
     return ((bits ushr 8) and 65535) / 65535f
 }
 
+/** Completed strokes composite once into an offscreen layer; only the active stroke redraws. */
+internal class InkLayer(private val side: Int, private val density: Float) {
+    private val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
+    private val canvas = Canvas(bitmap.asImageBitmap())
+    private val scope = CanvasDrawScope()
+    private val brush = SumiBrush()
+    val image = bitmap.asImageBitmap()
+    private var painted = 0
+
+    fun reset() {
+        bitmap.eraseColor(android.graphics.Color.TRANSPARENT)
+        painted = 0
+    }
+
+    fun append(strokes: List<SumiStroke>, end: Int) {
+        if (end <= painted) return
+        scope.draw(Density(density), LayoutDirection.Ltr, canvas,
+            Size(side.toFloat(), side.toFloat())) {
+            for (index in painted until end) brush.draw(this, strokes[index])
+        }
+        painted = end
+    }
+}
+
 /** Render just the ink. Paper, guide and controls never become part of the saved artwork. */
-internal fun renderSumiImage(strokes: List<SumiStroke>, side: Int, density: Float): Bitmap {
+internal fun renderSumiImage(strokes: List<SumiStroke>, side: Int, density: Float,
+    scale: Float = 1f): Bitmap {
     val bitmap = Bitmap.createBitmap(side, side, Bitmap.Config.ARGB_8888)
     val brush = SumiBrush()
     CanvasDrawScope().draw(Density(density), LayoutDirection.Ltr, Canvas(bitmap.asImageBitmap()),
         Size(side.toFloat(), side.toFloat())) {
-        for (stroke in strokes) brush.draw(this, stroke)
+        if (scale == 1f) for (stroke in strokes) brush.draw(this, stroke)
+        else scale(scale, scale, pivot = Offset.Zero) {
+            for (stroke in strokes) brush.draw(this, stroke)
+        }
     }
     return bitmap
 }

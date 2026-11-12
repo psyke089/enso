@@ -33,7 +33,7 @@
             android:screenOrientation="portrait"
             android:theme="@style/Theme.Enso.Splash"
             android:windowSoftInputMode="adjustResize"
-            tools:ignore="LockedOrientationActivity">
+            tools:ignore="LockedOrientationActivity,DiscouragedApi">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

@@ -3,6 +3,8 @@ package app.enso.meditation
 import android.app.Application
 import android.os.SystemClock
 import android.util.Log
+import app.enso.meditation.ui.BrushSettingsStore
+import app.enso.meditation.ui.EnsoImageStore
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,6 +14,18 @@ import java.io.IOException
 
 class EnsoApplication : Application() {
     val controller by lazy { SessionController(this) }
+    internal val imageStore by lazy { EnsoImageStore(this) }
+    private val warmUp = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    override fun onCreate() {
+        super.onCreate()
+        // First SharedPreferences/AtomicFile access parses XML and reads disk; never do that in
+        // composition. Both stores cache their values in memory afterwards.
+        warmUp.launch {
+            imageStore.warmUp()
+            BrushSettingsStore(this@EnsoApplication).warmUp()
+        }
+    }
 }
 
 enum class SessionAction { Start, Pause, Resume, Stop, Restore }
@@ -24,24 +38,38 @@ class SessionController(application: Application) {
     private val adjustmentFeedback = AdjustmentFeedback(application)
     private val mutex = Mutex()
     private val mutableState = MutableStateFlow(TimerUiState())
+    private val mutableLayout = MutableStateFlow(TimerUiState())
+    private val mutableTick = MutableStateFlow(TimerTick())
     val state = mutableState.asStateFlow()
+    val layoutState = mutableLayout.asStateFlow()
+    val tickState = mutableTick.asStateFlow()
     private var warning = false
     private lateinit var engine: TimerEngine
     private val initialized = scope.async {
-        val saved = try { store.load() } catch (e: IOException) {
+        val saved = try { store.load() } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (e: Exception) {
             Log.e("Enso", "Unable to read local state", e)
             warning = true
             TimerSnapshot()
         }
         engine = TimerEngine(saved, SystemClock.elapsedRealtime())
-        if (engine.snapshot != saved) persist()
+        try {
+            if (engine.snapshot != saved) persist()
+        } catch (e: Exception) {
+            Log.e("Enso", "Unable to initialize local state", e)
+            warning = true
+        }
         publish()
     }
 
     suspend fun awaitReady() { initialized.await() }
 
     private fun publish() {
-        mutableState.value = engine.uiState(SystemClock.elapsedRealtime()).copy(storageWarning = warning)
+        val next = engine.uiState(SystemClock.elapsedRealtime()).copy(storageWarning = warning)
+        mutableState.value = next
+        mutableLayout.value = next.withoutTick()
+        mutableTick.value = next.tick()
     }
 
     private suspend fun persist() {
@@ -99,8 +127,11 @@ class SessionController(application: Application) {
             val previous = snapshot.settings
             val next = change(previous)
             // Persist the activation together with the toggle, even if today's normal Enso exists.
-            updateSettings(if (next.hardcoreMode && !previous.hardcoreMode)
-                next.copy(hardcoreEnabledAt = System.currentTimeMillis()) else next)
+            updateSettings(when {
+                next.hardcoreMode && !previous.hardcoreMode -> next.copy(hardcorePending = true)
+                !next.hardcoreMode -> next.copy(hardcorePending = false)
+                else -> next
+            })
             emptyList()
         } }
     }

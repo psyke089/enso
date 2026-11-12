@@ -1,6 +1,11 @@
 package app.enso.meditation.ui
 
 import androidx.activity.compose.BackHandler
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.togetherWith
@@ -68,13 +73,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.flow.StateFlow
 import app.enso.meditation.*
 import app.enso.meditation.BuildConfig
 import app.enso.meditation.R
 import app.enso.meditation.ui.theme.*
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -86,6 +92,7 @@ import kotlin.math.hypot
 @Composable
 fun EnsoScreen(
     state: TimerUiState,
+    tick: StateFlow<TimerTick>,
     adjustDuration: (Int) -> Unit,
     adjustRepetitions: (Int) -> Unit,
     changeSettings: ((EnsoSettings) -> EnsoSettings) -> Unit,
@@ -99,8 +106,13 @@ fun EnsoScreen(
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var paintingOpen by remember { mutableStateOf(false) }
     var circleBounds by remember { mutableStateOf<Rect?>(null) }
+    var boundsKnown by remember { mutableStateOf(false) }
+    val latestBounds = remember { LatestBounds() }
     val context = LocalContext.current
-    val imageStore = remember(context) { EnsoImageStore(context.applicationContext) }
+    val imageStore = remember(context) {
+        (context.applicationContext as? EnsoApplication)?.imageStore
+            ?: EnsoImageStore(context.applicationContext)
+    }
     var customEnso by remember { mutableStateOf<ImageBitmap?>(null) }
     var customFrameScale by remember { mutableFloatStateOf(1f) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
@@ -122,31 +134,45 @@ fun EnsoScreen(
     val launchMotion = remember { Animatable(if (launchComplete) 1f else 0f) }
     val mainOpacity = remember { Animatable(if (launchComplete) 1f else 0f) }
     var artworkLoaded by remember { mutableStateOf(false) }
-    var drawnToday by remember { mutableStateOf(imageStore.wasDrawnToday()) }
-    LaunchedEffect(imageStore) {
-        while (true) {
-            drawnToday = imageStore.wasDrawnToday()
-            delay(30_000)
+    var drawnToday by remember { mutableStateOf(false) }
+    DisposableEffect(context, imageStore) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                drawnToday = imageStore.wasDrawnToday()
+            }
         }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_DATE_CHANGED)
+            addAction(Intent.ACTION_TIME_CHANGED)
+            addAction(Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        onDispose { context.unregisterReceiver(receiver) }
     }
     var handingOff by remember { mutableStateOf(false) }
     var painterClosing by remember { mutableStateOf(false) }
     var handoffImage by remember { mutableStateOf<ImageBitmap?>(null) }
     var handoffBounds by remember { mutableStateOf<Rect?>(null) }
     LaunchedEffect(imageStore) {
-        val saved = withContext(Dispatchers.IO) {
-            val bitmap = imageStore.load()?.also { it.prepareToDraw() }
-            bitmap?.asImageBitmap() to imageStore.frameScale()
+        try {
+            val saved = withContext(Dispatchers.IO) {
+                val bitmap = imageStore.load()?.also { it.prepareToDraw() }
+                bitmap?.asImageBitmap() to imageStore.frameScale()
+            }
+            customEnso = saved.first
+            customFrameScale = saved.second
+            drawnToday = imageStore.wasDrawnToday()
+        } finally {
+            // A failed decode must never leave the launch gate permanently closed.
+            artworkLoaded = true
         }
-        customEnso = saved.first
-        customFrameScale = saved.second
-        artworkLoaded = true
     }
-    LaunchedEffect(foregroundVisit, launchComplete, state.ready, circleBounds != null, hardcore, state.settings.hardcoreEnabledAt, settingsOpen) {
-        if (launchComplete && state.ready && circleBounds != null && !settingsOpen && !paintingOpen) {
+    LaunchedEffect(foregroundVisit, launchComplete, state.ready, boundsKnown, hardcore, state.settings.hardcorePending, settingsOpen) {
+        if (launchComplete && state.ready && boundsKnown && !settingsOpen && !paintingOpen) {
             drawnToday = imageStore.wasDrawnToday()
             // Hardcore mode demands the one canvas of the day; otherwise this stays an invitation.
-            if (imageStore.shouldOpenPainter(hardcore, enabledAt = state.settings.hardcoreEnabledAt)) {
+            if (imageStore.shouldOpenPainter(hardcore, state.settings.hardcorePending)) {
+                circleBounds = latestBounds.rect
                 painterOpacity.snapTo(0f)
                 paintingOpen = true
                 // Finish the reveal even when another effect key changes during the fade.
@@ -154,9 +180,12 @@ fun EnsoScreen(
             }
         }
     }
-    LaunchedEffect(splashReleased, artworkLoaded, circleBounds != null, state.ready) {
-        if (!launchComplete && splashReleased && artworkLoaded && circleBounds != null && state.ready) {
-            launchToPainter = animateLaunch && imageStore.shouldOpenPainter(hardcore, enabledAt = state.settings.hardcoreEnabledAt)
+    LaunchedEffect(splashReleased, artworkLoaded, boundsKnown, state.ready) {
+        val bounds = latestBounds.rect
+        if (!launchComplete && splashReleased && artworkLoaded && bounds != null && state.ready) {
+            circleBounds = bounds
+            launchToPainter = animateLaunch &&
+                imageStore.shouldOpenPainter(hardcore, state.settings.hardcorePending)
             // Both destinations are composed before the first moving frame. One clock keeps
             // translation, artwork blending and the controls continuous, without a mid-flight mount.
             withFrameNanos { }
@@ -202,10 +231,14 @@ fun EnsoScreen(
                         // Hardcore mode owns the only canvas of the day; no second attempt exists.
                         if (!hardcore) {
                             InkPaintButton(drawnToday) {
-                                if (circleBounds != null && launchComplete) scope.launch {
-                                    painterOpacity.snapTo(0f)
-                                    paintingOpen = true
-                                    painterOpacity.animateTo(1f, tween(360))
+                                val bounds = latestBounds.rect
+                                if (bounds != null && launchComplete) {
+                                    circleBounds = bounds
+                                    scope.launch {
+                                        painterOpacity.snapTo(0f)
+                                        paintingOpen = true
+                                        painterOpacity.animateTo(1f, tween(360))
+                                    }
                                 }
                             }
                             Spacer(Modifier.width(8.dp))
@@ -213,10 +246,13 @@ fun EnsoScreen(
                         InkSettingsButton { settingsOpen = true }
                     }
                     Spacer(Modifier.height(topSpace))
-                    TimerCircle(state, adjustDuration, adjustRepetitions, customEnso, customFrameScale, !handingOff && launchComplete,
-                        Modifier.size(circleSize).testTag("Timer artwork frame").onGloballyPositioned { circleBounds = Rect(it.positionInRoot(), it.size.toSize()) })
+                    TimerCircle(state, tick, adjustDuration, adjustRepetitions, customEnso, customFrameScale, !handingOff && launchComplete,
+                        Modifier.size(circleSize).testTag("Timer artwork frame").onGloballyPositioned {
+                            latestBounds.rect = Rect(it.positionInRoot(), it.size.toSize())
+                            if (!boundsKnown && it.size != IntSize.Zero) boundsKnown = true
+                        })
                     Spacer(Modifier.height(16.dp))
-                    RepetitionDisplay(state)
+                    RepetitionDisplay(state, tick)
                     Spacer(Modifier.height(if (compact) 8.dp else 16.dp))
                     InkAction(
                         label = stringResource(when (state.phase) { TimerPhase.Idle -> R.string.action_start; TimerPhase.Running -> R.string.action_pause; TimerPhase.Paused -> R.string.action_resume }),
@@ -262,7 +298,7 @@ fun EnsoScreen(
             }
         }
         if (paintingOpen || (!launchComplete && launchToPainter)) circleBounds?.let { bounds ->
-            val side = viewSize.width.toFloat()
+            val side = minOf(viewSize.width, viewSize.height).toFloat()
             val paintBounds = Rect(bounds.center.x - side / 2, bounds.center.y - side / 2,
                 bounds.center.x + side / 2, bounds.center.y + side / 2)
             EnsoPainter(paintBounds, bounds, Modifier.graphicsLayer {
@@ -272,6 +308,7 @@ fun EnsoScreen(
                 handingOff, painterClosing || !launchComplete, hardcore = hardcore, onSave = { bitmap ->
                 val scale = side / bounds.width
                 withContext(Dispatchers.IO) { imageStore.save(bitmap, scale) }
+                if (hardcore) changeSettings { it.copy(hardcorePending = false) }
                 mainOpacity.snapTo(0f)
                 drawnToday = imageStore.wasDrawnToday()
                 customEnso = bitmap.asImageBitmap()
@@ -351,11 +388,12 @@ fun EnsoScreen(
 
 /** A quiet ink tally. Completed intervals fade from the right, leaving the next ones dark. */
 @Composable
-private fun RepetitionDisplay(state: TimerUiState) {
+private fun RepetitionDisplay(state: TimerUiState, tick: StateFlow<TimerTick>) {
+    val current by tick.collectAsState()
     val active = state.phase != TimerPhase.Idle
-    val completed = if (active) state.completedIntervals.coerceIn(0, state.repeatCount.toLong()).toInt() else 0
+    val completed = if (active) current.completedIntervals.coerceIn(0, state.repeatCount.toLong()).toInt() else 0
     val description = if (active)
-        stringResource(R.string.interval_of, (state.completedIntervals + 1).toInt(),
+        stringResource(R.string.interval_of, (current.completedIntervals + 1).toInt(),
             if (state.continuous) stringResource(R.string.unlimited) else state.repeatCount.toString())
         else if (state.continuous) stringResource(R.string.unlimited_repetitions)
         else pluralStringResource(R.plurals.repetitions, state.repeatCount, state.repeatCount)
@@ -407,11 +445,22 @@ private fun RepetitionDisplay(state: TimerUiState) {
 
 /** Session time sits quietly beneath the interval countdown inside the Enso. */
 @Composable
-private fun SessionTime(state: TimerUiState) {
-    if (state.continuous) return
-    val active = state.phase != TimerPhase.Idle
-    val total = state.totalMs?.let(::formatTime) ?: return
-    val elapsed = formatTime(state.elapsedMs / 1000 * 1000)
+private fun SessionTime(current: TimerTick, phase: TimerPhase, continuous: Boolean, totalMs: Long?) {
+    if (continuous) {
+        val active = phase != TimerPhase.Idle
+        val elapsed = formatTime(current.elapsedMs)
+        val description = if (active) stringResource(R.string.elapsed_unlimited, elapsed)
+            else stringResource(R.string.unlimited)
+        Box(Modifier.height(28.dp), contentAlignment = Alignment.Center) {
+            Text(if (active) "$elapsed / ∞" else "∞",
+                color = FadedInk, fontFamily = FontFamily.Monospace, fontSize = 12.sp,
+                modifier = Modifier.semantics { contentDescription = description })
+        }
+        return
+    }
+    val total = totalMs?.let(::formatTime) ?: return
+    val active = phase != TimerPhase.Idle
+    val elapsed = formatTime(current.elapsedMs)
     val description = if (active) stringResource(R.string.elapsed_total, elapsed, total)
         else stringResource(R.string.total_duration, total)
     Box(Modifier.height(28.dp), contentAlignment = Alignment.Center) {
@@ -487,29 +536,15 @@ private fun Saying(text: String, visible: Boolean) {
 }
 
 @Composable
-private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit,
+private fun TimerCircle(state: TimerUiState, tick: StateFlow<TimerTick>, adjustDuration: (Int) -> Unit,
     adjustRepetitions: (Int) -> Unit, customEnso: ImageBitmap?, frameScale: Float, showArtwork: Boolean, modifier: Modifier) {
     var brushRotation by rememberSaveable(customEnso) { mutableFloatStateOf(0f) }
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         if (showArtwork) EnsoArtwork(if (customEnso == null) Modifier.fillMaxSize()
             else Modifier.requiredSize(maxWidth * frameScale), paused = state.phase == TimerPhase.Paused,
             rotationDegrees = brushRotation, customImage = customEnso)
-        val fontScale = LocalDensity.current.fontScale
-        val textSize = maxWidth.value * (if (state.remainingMs > 3_599_000) .108f else .157f) /
-            (fontScale / 1.25f).coerceAtLeast(1f)
-        if (state.settings.showTime) Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Spacer(Modifier.height(6.dp))
-            val timeText = formatTime(state.remainingMs)
-            val timeDescription = stringResource(if (state.phase == TimerPhase.Idle)
-                R.string.time_selected else R.string.time_remaining, timeText)
-            val pausedDescription = stringResource(R.string.paused)
-            Text(timeText, fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Light, fontSize = textSize.sp, color = Ink,
-                maxLines = 1, modifier = Modifier.semantics {
-                    contentDescription = timeDescription
-                    if (state.phase == TimerPhase.Paused) stateDescription = pausedDescription
-                })
-            SessionTime(state)
+        if (state.settings.showTime) {
+            TimerReadout(tick, state.phase, state.continuous, state.totalMs, maxWidth)
         }
         if (state.ready && state.phase == TimerPhase.Idle) {
             CircleInput(state, adjustDuration, adjustRepetitions) { delta ->
@@ -517,6 +552,30 @@ private fun TimerCircle(state: TimerUiState, adjustDuration: (Int) -> Unit,
             }
         }
 
+    }
+}
+
+/** Reads the ticking snapshot here, so 250 ms updates never recompose the screen body. */
+@Composable
+private fun TimerReadout(tick: StateFlow<TimerTick>, phase: TimerPhase, continuous: Boolean,
+    totalMs: Long?, maxWidth: Dp) {
+    val current by tick.collectAsState()
+    val fontScale = LocalDensity.current.fontScale
+    val textSize = maxWidth.value * (if (current.remainingMs > 3_599_000) .108f else .157f) /
+        (fontScale / 1.25f).coerceAtLeast(1f)
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Spacer(Modifier.height(6.dp))
+        val timeText = formatTime(current.remainingMs)
+        val timeDescription = stringResource(if (phase == TimerPhase.Idle)
+            R.string.time_selected else R.string.time_remaining, timeText)
+        val pausedDescription = stringResource(R.string.paused)
+        Text(timeText, fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Light, fontSize = textSize.sp, color = Ink,
+            maxLines = 1, modifier = Modifier.semantics {
+                contentDescription = timeDescription
+                if (phase == TimerPhase.Paused) stateDescription = pausedDescription
+            })
+        SessionTime(current, phase, continuous, totalMs)
     }
 }
 
@@ -797,6 +856,9 @@ private fun InkToggle(checked: Boolean) {
         }
     }
 }
+
+/** Plain holder: scroll-driven layout updates must not invalidate composition. */
+private class LatestBounds { var rect: Rect? = null }
 
 /** Smoothstep has zero velocity at either end, including staggered fades on the launch clock. */
 private fun launchFraction(progress: Float, start: Float, end: Float): Float {

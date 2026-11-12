@@ -65,6 +65,7 @@
     <string name="time_remaining">%1$s verbleibend</string>
     <string name="paused">Pausiert</string>
     <string name="elapsed_total">%1$s vergangen, %2$s Gesamtdauer</string>
+    <string name="elapsed_unlimited">%1$s vergangen, unbegrenzte Dauer</string>
     <string name="total_duration">%1$s Gesamtdauer</string>
 
     <string name="close_painting">Zeichnen schließen</string>

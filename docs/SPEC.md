@@ -1604,13 +1604,13 @@ A setting, off by default. While it is on, the main view hides the brush button,
 view offers exactly one control: the checkmark that saves the painting. Close, reset,
 restore-standard and brush settings disappear, and Back does not leave the canvas; a painting can
 only be accepted as it is. After closing Settings, the canvas opens as the next view when the
-setting has been enabled, even if a normal drawing was already saved today. Persist the activation
-time with the setting so this obligation survives a restart. It is satisfied by a painting saved
-after activation. The canvas also opens on every launch or foreground return of a local day whose
+setting has been enabled, even if a normal drawing was already saved today. Persist an
+activation-pending flag with the setting so this obligation survives a restart; do not compare
+wall-clock timestamps. Saving a painting clears the flag. The canvas also opens on every launch or foreground return of a local day whose
 drawing is not yet saved. Once saved, the canvas cannot be opened again before the next local day
 while the mode remains enabled. Switching the setting off restores all controls immediately;
 enabling it again starts a new activation and requires a new drawing. The mode stores only its
-activation time in addition to the daily saved drawing itself.
+pending-activation flag in addition to the daily saved drawing itself.
 
 Unsaved drafts remain temporary, including in Hardcore mode: activity recreation or process death
 discards their strokes and reopens an empty canvas if a painting is still required. This is an

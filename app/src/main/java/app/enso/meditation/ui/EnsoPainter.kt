@@ -46,11 +46,14 @@ import kotlinx.coroutines.withContext
 
 /** Draw at the timer artwork bounds; only an explicit Save & use replaces its image. */
 @Composable
-internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: Modifier, transitioning: Boolean, closing: Boolean, hardcore: Boolean = false, onSave: suspend (Bitmap) -> Unit,
+internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, modifier: Modifier, transitioning: Boolean, closing: Boolean, hardcore: Boolean = false, onSave: suspend (Bitmap) -> Unit,
     onUseStandard: suspend () -> Unit, onClose: () -> Unit) {
     val strokes = remember { mutableStateListOf<SumiStroke>() }
     val density = LocalDensity.current.density
     val brush = remember { SumiBrush() }
+    val inkLayer = remember(artworkBounds.width, artworkBounds.height, density) {
+        InkLayer(artworkBounds.width.roundToInt().coerceAtLeast(1), density)
+    }
     val context = LocalContext.current
     val saveError = stringResource(R.string.save_error)
     val store = remember(context) { BrushSettingsStore(context) }
@@ -85,7 +88,7 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
     }
     // Hardcore mode has exactly one exit: saving the painting.
     BackHandler { if (!busy && !hardcore) onClose() }
-    Box(Modifier.fillMaxSize().then(layerModifier).background(Paper)
+    Box(Modifier.fillMaxSize().then(modifier).background(Paper)
         .then(if (brushSettingsOpen) Modifier.clearAndSetSemantics {} else Modifier).pointerInput(Unit) {
         // Own hit testing even on the margins; touches must not reach the timer underneath.
         awaitEachGesture {
@@ -100,7 +103,7 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
             InkPainterIcon(PainterSymbol.Close, stringResource(R.string.close_painting), enabled = !busy, onClick = onClose)
             InkPainterIcon(PainterSymbol.Brush, stringResource(R.string.brush_settings), enabled = !busy) { brushSettingsOpen = true }
             InkAction(stringResource(R.string.reset_painting), R.drawable.ink_reset, enabled = strokes.isNotEmpty() && !busy && !drawing,
-                secondary = true) { strokes.clear() }
+                secondary = true) { strokes.clear(); inkLayer.reset() }
         }
         val canvasDescription = stringResource(R.string.painting_canvas)
         val strokesDescription = if (strokes.isEmpty()) stringResource(R.string.empty_canvas)
@@ -139,7 +142,12 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
                     } finally { stroke.finish(); drawing = false }
                 }
             }) {
-            if (!transitioning) for (stroke in strokes) brush.draw(this, stroke)
+            if (!transitioning) {
+                val finished = if (drawing) strokes.size - 1 else strokes.size
+                inkLayer.append(strokes, finished)
+                drawImage(inkLayer.image)
+                if (drawing) strokes.lastOrNull()?.let { brush.draw(this, it) }
+            }
         }
         Column(Modifier.zIndex(1f).align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {

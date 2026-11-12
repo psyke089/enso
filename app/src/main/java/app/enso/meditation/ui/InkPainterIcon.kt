@@ -13,23 +13,57 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import app.enso.meditation.R
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.*
 
 internal enum class PainterSymbol { Close, Brush, Apply, Trash }
+
+/** Source coordinates for the hand-authored stroke paths. */
+private const val ICON_SOURCE_SIDE = 128
+private const val ICON_DISPLAY_DP = 38f
 
 /** Small calligraphic controls, deposited with the same textured nib as the drawing tool. */
 @Composable
 internal fun InkPainterIcon(symbol: PainterSymbol, label: String, enabled: Boolean = true,
     onClick: () -> Unit) {
-    val image = remember(symbol) {
-        if (symbol == PainterSymbol.Brush) return@remember null
+    val density = LocalDensity.current.density
+    val image = remember(symbol, density) {
+        if (symbol == PainterSymbol.Brush) null
+        else PainterIcons.image(symbol, max(ICON_SOURCE_SIDE, ceil(ICON_DISPLAY_DP * density).toInt()))
+    }
+    Box(Modifier.size(48.dp).clip(CircleShape)
+        .clickable(enabled = enabled, role = Role.Button,
+            interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+        .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
+        if (symbol == PainterSymbol.Brush) {
+            Box(Modifier.size(38.dp).graphicsLayer { alpha = if (enabled) .88f else .25f }) {
+                BrushMark(Modifier.size(27.dp).align(Alignment.TopStart))
+                Image(painterResource(R.drawable.ink_settings), contentDescription = null,
+                    modifier = Modifier.size(24.dp).align(Alignment.BottomEnd))
+            }
+        } else image?.let {
+            Image(it, contentDescription = null, alpha = if (enabled) .88f else .25f,
+                modifier = Modifier.size(38.dp))
+        }
+    }
+}
+
+private object PainterIcons {
+    private val cache = ConcurrentHashMap<Pair<PainterSymbol, Int>, ImageBitmap>()
+
+    fun image(symbol: PainterSymbol, side: Int): ImageBitmap =
+        cache.getOrPut(symbol to side) { render(symbol, side) }
+
+    private fun render(symbol: PainterSymbol, side: Int): ImageBitmap {
         val strokes = mutableListOf<SumiStroke>()
         fun line(width: Float, points: List<Offset>) {
             val stroke = SumiStroke(1f, 1000f, strokes.size + 31,
@@ -65,21 +99,6 @@ internal fun InkPainterIcon(symbol: PainterSymbol, label: String, enabled: Boole
             }
             else -> Unit // Brush returns above; handled by its own icon.
         }
-        renderSumiImage(strokes, 128, 1f).asImageBitmap()
-    }
-    Box(Modifier.size(48.dp).clip(CircleShape)
-        .clickable(enabled = enabled, role = Role.Button,
-            interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-        .semantics { contentDescription = label }, contentAlignment = Alignment.Center) {
-        if (symbol == PainterSymbol.Brush) {
-            Box(Modifier.size(38.dp).graphicsLayer { alpha = if (enabled) .88f else .25f }) {
-                BrushMark(Modifier.size(27.dp).align(Alignment.TopStart))
-                Image(painterResource(R.drawable.ink_settings), contentDescription = null,
-                    modifier = Modifier.size(24.dp).align(Alignment.BottomEnd))
-            }
-        } else image?.let {
-            Image(it, contentDescription = null, alpha = if (enabled) .88f else .25f,
-                modifier = Modifier.size(38.dp))
-        }
+        return renderSumiImage(strokes, side, 1f, side.toFloat() / ICON_SOURCE_SIDE).asImageBitmap()
     }
 }

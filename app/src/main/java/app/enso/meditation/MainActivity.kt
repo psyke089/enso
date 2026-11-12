@@ -79,9 +79,9 @@ class MainActivity : ComponentActivity() {
             }
         }
         setContent {
-            val state by controller.state.collectAsState()
+            val state by controller.layoutState.collectAsState()
             EnsoTheme {
-                EnsoScreen(state, controller::adjustDuration, controller::adjustRepetitions,
+                EnsoScreen(state, controller.tickState, controller::adjustDuration, controller::adjustRepetitions,
                     controller::changeSettings,
                     controller::previewGong, animateLaunch = savedInstanceState == null,
                     splashReleased = splashReleased, splashBounds = splashBounds, splashIcon = splashIcon) { action ->

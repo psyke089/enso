@@ -1,21 +1,22 @@
 package app.enso.meditation
 
+import androidx.annotation.RawRes
 import androidx.annotation.StringRes
 
 /**
  * Selectable local gong recordings. Adding a future gong is one entry here plus one
- * file in `res/raw`, so the player never hard-codes a single recording.
+ * file in `res/raw`; the player never resolves resources by name, so R8 stays safe.
  */
-enum class GongChoice(val resourceName: String, @StringRes val labelRes: Int) {
-    Root("gong_root", R.string.gong_root),
-    RootDeep("gong_root_deep", R.string.gong_root_deep),
-    Sacral("gong_sacral", R.string.gong_sacral),
-    SolarPlexus("gong_solar", R.string.gong_solar_plexus),
-    Heart("gong_heart", R.string.gong_heart),
-    Throat("gong_throat", R.string.gong_throat),
-    ThirdEye("gong_third_eye", R.string.gong_third_eye),
-    Crown("gong_crown", R.string.gong_crown),
-    Bell("gong_bell", R.string.gong_bell);
+enum class GongChoice(@StringRes val labelRes: Int, @RawRes val soundRes: Int) {
+    Root(R.string.gong_root, R.raw.gong_root),
+    RootDeep(R.string.gong_root_deep, R.raw.gong_root_deep),
+    Sacral(R.string.gong_sacral, R.raw.gong_sacral),
+    SolarPlexus(R.string.gong_solar_plexus, R.raw.gong_solar),
+    Heart(R.string.gong_heart, R.raw.gong_heart),
+    Throat(R.string.gong_throat, R.raw.gong_throat),
+    ThirdEye(R.string.gong_third_eye, R.raw.gong_third_eye),
+    Crown(R.string.gong_crown, R.raw.gong_crown),
+    Bell(R.string.gong_bell, R.raw.gong_bell);
 
     fun next(): GongChoice = entries[(ordinal + 1) % entries.size]
 

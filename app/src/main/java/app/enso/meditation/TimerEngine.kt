@@ -3,6 +3,7 @@ package app.enso.meditation
 import java.util.Locale
 
 val ROTATION_STEP_OPTIONS = listOf(1, 2, 5, 10, 15)
+const val DEFAULT_ROTATION_STEP_MINUTES = 5
 
 const val DURATION_STEP = 5 * 60_000L
 const val MAX_DURATION = 24 * 60 * 60_000L
@@ -19,11 +20,11 @@ data class EnsoSettings(
     val endGongSound: GongChoice = GongChoice.Bell,
     val middleGongSound: GongChoice = GongChoice.Heart,
     val showSaying: Boolean = true,
-    val rotationStepMinutes: Int = 5,
+    val rotationStepMinutes: Int = DEFAULT_ROTATION_STEP_MINUTES,
     val showTime: Boolean = true,
     val hapticFeedback: Boolean = true,
     val hardcoreMode: Boolean = false,
-    val hardcoreEnabledAt: Long = 0L,
+    val hardcorePending: Boolean = false,
 )
 
 enum class TimerPhase { Idle, Running, Paused }
@@ -61,6 +62,24 @@ data class TimerUiState(
     val totalMs: Long? = DEFAULT_DURATION,
     val elapsedMs: Long = 0,
     val progress: Float = 0f,
+)
+
+/** What changes on the 250 ms clock; everything else lives in [TimerUiState]. */
+data class TimerTick(
+    val remainingMs: Long = DEFAULT_DURATION,
+    val elapsedMs: Long = 0,
+    val completedIntervals: Long = 0,
+)
+
+/** Layout state must not change identity on every tick, or the whole screen recomposes. */
+fun TimerUiState.withoutTick() = copy(remainingMs = 0, elapsedMs = 0,
+    progress = 0f, completedIntervals = 0)
+
+/** Text and tallies only care about whole seconds and completed boundaries. */
+fun TimerUiState.tick() = TimerTick(
+    remainingMs = (remainingMs + 999) / 1000 * 1000,
+    elapsedMs = elapsedMs / 1000 * 1000,
+    completedIntervals = completedIntervals,
 )
 
 sealed interface TimerEvent {
@@ -207,5 +226,6 @@ fun formatTime(milliseconds: Long): String {
 }
 
 private fun normalizeSettings(settings: EnsoSettings) = settings.copy(
-    rotationStepMinutes = settings.rotationStepMinutes.takeIf { it in ROTATION_STEP_OPTIONS } ?: 5,
+    rotationStepMinutes = settings.rotationStepMinutes.takeIf { it in ROTATION_STEP_OPTIONS }
+        ?: DEFAULT_ROTATION_STEP_MINUTES,
 )
