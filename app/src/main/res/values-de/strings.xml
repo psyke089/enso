@@ -23,6 +23,7 @@
     <string name="vibration">Vibration</string>
     <string name="show_time">Zeit anzeigen</string>
     <string name="show_saying">Spruch anzeigen</string>
+    <string name="hardcore_mode">Hardcore-Modus</string>
     <string name="previous_gong">Vorheriger Gong</string>
     <string name="next_gong">Nächster Gong</string>
     <string name="preview_gong">%1$s anhören</string>

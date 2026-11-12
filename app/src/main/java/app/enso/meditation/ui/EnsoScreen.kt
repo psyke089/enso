@@ -106,7 +106,9 @@ fun EnsoScreen(
     var viewSize by remember { mutableStateOf(IntSize.Zero) }
     val scope = rememberCoroutineScope()
     val painterOpacity = remember { Animatable(1f) }
-    val launchToPainter = remember { animateLaunch && imageStore.shouldPromptToday() }
+    val hardcore = state.settings.hardcoreMode
+    // The splash target needs the persisted setting, which arrives with the first engine state.
+    var launchToPainter by remember { mutableStateOf(false) }
     var foregroundVisit by remember { mutableIntStateOf(0) }
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -137,10 +139,11 @@ fun EnsoScreen(
         customFrameScale = saved.second
         artworkLoaded = true
     }
-    LaunchedEffect(foregroundVisit, launchComplete, state.ready, circleBounds != null) {
-        if (launchComplete && state.ready && circleBounds != null) {
+    LaunchedEffect(foregroundVisit, launchComplete, state.ready, circleBounds != null, hardcore, settingsOpen) {
+        if (launchComplete && state.ready && circleBounds != null && !settingsOpen && !paintingOpen) {
             drawnToday = imageStore.wasDrawnToday()
-            if (!paintingOpen && imageStore.shouldPromptToday()) {
+            // Hardcore mode demands the one canvas of the day; otherwise this stays an invitation.
+            if (imageStore.shouldOpenPainter(hardcore)) {
                 painterOpacity.snapTo(0f)
                 paintingOpen = true
                 painterOpacity.animateTo(1f, tween(450))
@@ -149,6 +152,7 @@ fun EnsoScreen(
     }
     LaunchedEffect(splashReleased, artworkLoaded, circleBounds != null, state.ready) {
         if (!launchComplete && splashReleased && artworkLoaded && circleBounds != null && state.ready) {
+            launchToPainter = animateLaunch && imageStore.shouldOpenPainter(state.settings.hardcoreMode)
             // Both destinations are composed before the first moving frame. One clock keeps
             // translation, artwork blending and the controls continuous, without a mid-flight mount.
             withFrameNanos { }
@@ -191,14 +195,17 @@ fun EnsoScreen(
                     Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically) {
-                        InkPaintButton(drawnToday) {
-                            if (circleBounds != null && launchComplete) scope.launch {
-                                painterOpacity.snapTo(0f)
-                                paintingOpen = true
-                                painterOpacity.animateTo(1f, tween(360))
+                        // Hardcore mode owns the only canvas of the day; no second attempt exists.
+                        if (!hardcore) {
+                            InkPaintButton(drawnToday) {
+                                if (circleBounds != null && launchComplete) scope.launch {
+                                    painterOpacity.snapTo(0f)
+                                    paintingOpen = true
+                                    painterOpacity.animateTo(1f, tween(360))
+                                }
                             }
+                            Spacer(Modifier.width(8.dp))
                         }
-                        Spacer(Modifier.width(8.dp))
                         InkSettingsButton { settingsOpen = true }
                     }
                     Spacer(Modifier.height(topSpace))
@@ -257,7 +264,7 @@ fun EnsoScreen(
                 alpha = if (!launchComplete) launchFraction(launchMotion.value, .22f, .94f)
                     else painterOpacity.value
             }.then(if (!launchComplete) Modifier.clearAndSetSemantics {} else Modifier),
-                handingOff, painterClosing || !launchComplete, onSave = { bitmap ->
+                handingOff, painterClosing || !launchComplete, hardcore = hardcore, onSave = { bitmap ->
                 val scale = side / bounds.width
                 withContext(Dispatchers.IO) { imageStore.save(bitmap, scale) }
                 mainOpacity.snapTo(0f)
@@ -709,6 +716,9 @@ private fun SettingsPanel(
         }
         Setting(stringResource(R.string.show_saying), settings.showSaying) { value ->
             changeSettings { it.copy(showSaying = value) }
+        }
+        Setting(stringResource(R.string.hardcore_mode), settings.hardcoreMode) { value ->
+            changeSettings { it.copy(hardcoreMode = value) }
         }
     }
 }

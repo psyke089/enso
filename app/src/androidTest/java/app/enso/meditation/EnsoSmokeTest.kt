@@ -46,6 +46,11 @@ class EnsoSmokeTest {
         savedArtworkDates = (if (preferences.contains("last_drawn_at")) preferences.getLong("last_drawn_at", 0L) else null) to
             (if (preferences.contains("last_dismissed_at")) preferences.getLong("last_dismissed_at", 0L) else null)
         awaitState { it.ready }
+        // A crashed hardcore run would otherwise hide every control these tests rely on.
+        if (state.settings.hardcoreMode) {
+            controller.changeSettings { it.copy(hardcoreMode = false) }
+            awaitState { !it.settings.hardcoreMode }
+        }
         compose.waitUntil(5_000) {
             compose.onAllNodesWithContentDescription(str(R.string.close_painting)).fetchSemanticsNodes().isNotEmpty() ||
                 compose.onAllNodesWithContentDescription(str(R.string.paint_enso)).fetchSemanticsNodes().isNotEmpty()
@@ -590,6 +595,93 @@ class EnsoSmokeTest {
         canvas.assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, str(R.string.empty_canvas)))
         androidx.test.espresso.Espresso.pressBack()
         compose.onNodeWithContentDescription(str(R.string.painting_canvas)).assertDoesNotExist()
+    }
+
+    @Test fun hardcoreModeDemandsOnePaintingPerDayAndLeavesNoWayBack() {
+        awaitState { it.ready }
+        val imageStore = app.enso.meditation.ui.EnsoImageStore(compose.activity)
+        val preferences = compose.activity.getSharedPreferences("enso_artwork", android.content.Context.MODE_PRIVATE)
+        val original = state.settings
+        val originalImage = imageStore.load()
+        val originalScale = imageStore.frameScale()
+        val originalDrawnAt = preferences.getLong("last_drawn_at", 0L)
+        try {
+            // A dismissed invitation still opens the canvas, because hardcore has no dismissal.
+            preferences.edit().putLong("last_drawn_at", 0L)
+                .putLong("last_dismissed_at", System.currentTimeMillis()).commit()
+            assertTrue(imageStore.shouldOpenPainter(hardcore = true))
+            assertFalse(imageStore.shouldOpenPainter(hardcore = false))
+
+            compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
+            compose.onNodeWithText(str(R.string.hardcore_mode)).performScrollTo().performClick()
+            awaitState { it.settings.hardcoreMode }
+            assertTrue(runBlocking { EnsoStore(compose.activity).load() }.settings.hardcoreMode)
+            compose.onNodeWithContentDescription(str(R.string.close_settings)).performScrollTo().performClick()
+
+            // Closing settings hands straight over to the single canvas of the day.
+            compose.waitUntil(5_000) {
+                compose.onAllNodesWithContentDescription(str(R.string.painting_canvas)).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.onNodeWithContentDescription(str(R.string.close_painting)).assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.brush_settings)).assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.use_standard_enso)).assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.reset_painting)).assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.save_painted_enso)).assertIsNotEnabled()
+
+            // Back must not leave the canvas; only the checkmark does.
+            androidx.test.espresso.Espresso.pressBack()
+            compose.onNodeWithContentDescription(str(R.string.painting_canvas)).assertIsDisplayed()
+            val canvas = compose.onNodeWithContentDescription(str(R.string.painting_canvas))
+            canvas.performTouchInput {
+                val radius = minOf(width, height) * .34f
+                fun point(degrees: Int): Offset {
+                    val angle = Math.toRadians(degrees.toDouble())
+                    return center + Offset(cos(angle).toFloat() * radius, sin(angle).toFloat() * radius)
+                }
+                down(point(-120))
+                for (degrees in -115..200 step 5) moveTo(point(degrees), 16)
+                up()
+            }
+            compose.onNodeWithContentDescription(str(R.string.save_painted_enso)).assertIsEnabled().performClick()
+            compose.waitUntil(5_000) {
+                compose.onAllNodesWithTag("Custom Enso artwork").fetchSemanticsNodes().isNotEmpty()
+            }
+            assertTrue(imageStore.wasDrawnToday())
+            assertFalse(imageStore.shouldOpenPainter(hardcore = true))
+
+            // The one attempt is spent: no button, no canvas, also not after a relaunch.
+            compose.onNodeWithContentDescription(str(R.string.paint_enso)).assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.painting_canvas)).assertDoesNotExist()
+            compose.activityRule.scenario.recreate()
+            awaitState { it.ready }
+            compose.waitUntil(5_000) {
+                compose.onAllNodesWithContentDescription(str(R.string.settings)).fetchSemanticsNodes().isNotEmpty()
+            }
+            compose.waitForIdle()
+            compose.onNodeWithContentDescription(str(R.string.painting_canvas)).assertDoesNotExist()
+            compose.onNodeWithContentDescription(str(R.string.paint_enso)).assertDoesNotExist()
+
+            // Switching hardcore off restores every control.
+            compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
+            compose.onNodeWithText(str(R.string.hardcore_mode)).performScrollTo().performClick()
+            awaitState { !it.settings.hardcoreMode }
+            compose.onNodeWithContentDescription(str(R.string.close_settings)).performScrollTo().performClick()
+            compose.onNodeWithContentDescription(str(R.string.paint_enso)).assertIsDisplayed().performClick()
+            compose.onNodeWithContentDescription(str(R.string.close_painting)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.brush_settings)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.use_standard_enso)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.reset_painting)).assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.close_painting)).performClick()
+        } finally {
+            if (state.settings.hardcoreMode) {
+                controller.changeSettings { it.copy(hardcoreMode = false) }
+                awaitState { !it.settings.hardcoreMode }
+            }
+            controller.changeSettings { original }
+            awaitState { it.settings == original }
+            if (originalImage != null) imageStore.save(originalImage, originalScale) else imageStore.useStandard()
+            preferences.edit().putLong("last_drawn_at", originalDrawnAt).commit()
+        }
     }
 
 }

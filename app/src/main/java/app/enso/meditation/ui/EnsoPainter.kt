@@ -46,7 +46,7 @@ import kotlinx.coroutines.withContext
 
 /** Draw at the timer artwork bounds; only an explicit Save & use replaces its image. */
 @Composable
-internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: Modifier, transitioning: Boolean, closing: Boolean, onSave: suspend (Bitmap) -> Unit,
+internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: Modifier, transitioning: Boolean, closing: Boolean, hardcore: Boolean = false, onSave: suspend (Bitmap) -> Unit,
     onUseStandard: suspend () -> Unit, onClose: () -> Unit) {
     val strokes = remember { mutableStateListOf<SumiStroke>() }
     val density = LocalDensity.current.density
@@ -83,7 +83,8 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
             finally { saving = false }
         }
     }
-    BackHandler { if (!busy) onClose() }
+    // Hardcore mode has exactly one exit: saving the painting.
+    BackHandler { if (!busy && !hardcore) onClose() }
     Box(Modifier.fillMaxSize().then(layerModifier).background(Paper)
         .then(if (brushSettingsOpen) Modifier.clearAndSetSemantics {} else Modifier).pointerInput(Unit) {
         // Own hit testing even on the margins; touches must not reach the timer underneath.
@@ -93,7 +94,7 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
         }
     }) {
         WashiBackground(Modifier.matchParentSize())
-        Row(Modifier.zIndex(1f).fillMaxWidth().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+        if (!hardcore) Row(Modifier.zIndex(1f).fillMaxWidth().safeDrawingPadding().padding(horizontal = 20.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween) {
             InkPainterIcon(PainterSymbol.Close, stringResource(R.string.close_painting), enabled = !busy, onClick = onClose)
@@ -143,8 +144,9 @@ internal fun EnsoPainter(artworkBounds: Rect, guideBounds: Rect, layerModifier: 
         Column(Modifier.zIndex(1f).align(Alignment.BottomCenter).fillMaxWidth().safeDrawingPadding().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally) {
             error?.let { Text(it, color = Ink, fontSize = 13.sp) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                InkPainterIcon(PainterSymbol.Trash, stringResource(R.string.use_standard_enso), enabled = !busy && !drawing) { persist(true) }
+            Row(Modifier.fillMaxWidth(),
+                horizontalArrangement = if (hardcore) Arrangement.Center else Arrangement.SpaceBetween) {
+                if (!hardcore) InkPainterIcon(PainterSymbol.Trash, stringResource(R.string.use_standard_enso), enabled = !busy && !drawing) { persist(true) }
                 InkPainterIcon(PainterSymbol.Apply, stringResource(R.string.save_painted_enso),
                     enabled = !busy && !drawing && strokes.isNotEmpty()) { persist(false) }
             }

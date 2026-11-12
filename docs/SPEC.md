@@ -1590,6 +1590,17 @@ local day; saving satisfies it. No additional skip control is shown. On launch t
 fades into the drawing canvas rather than briefly showing the timer controls first. Returning to
 the app on a new day checks again; crossing midnight while using the app does not interrupt it.
 
+# Hardcore mode
+
+A setting, off by default. While it is on, the main view hides the brush button, and the drawing
+view offers exactly one control: the checkmark that saves the painting. Close, reset,
+restore-standard and brush settings disappear, and Back does not leave the canvas; a painting can
+only be accepted as it is. The canvas opens as the next view after the setting is enabled, and on
+every launch or foreground return of a local day whose drawing is not yet saved. Once saved, the
+canvas cannot be opened again before the next local day, so each day allows a single attempt.
+Switching the setting off restores all controls immediately. The mode stores nothing beyond the
+daily saved drawing itself.
+
 # Localization
 
 The default UI language is English. Provide a complete German translation in `values-de` and use

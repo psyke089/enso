@@ -18,6 +18,10 @@ internal class EnsoImageStore(context: Context) {
     fun shouldPromptToday(now: Long = System.currentTimeMillis()): Boolean =
         !wasDrawnToday(now) && !sameLocalDay(preferences.getLong("last_dismissed_at", 0L), now)
 
+    /** Hardcore mode has no dismissal: the one canvas of the day opens until it is saved. */
+    fun shouldOpenPainter(hardcore: Boolean, now: Long = System.currentTimeMillis()): Boolean =
+        if (hardcore) !wasDrawnToday(now) else shouldPromptToday(now)
+
     fun dismissForToday() {
         preferences.edit().putLong("last_dismissed_at", System.currentTimeMillis()).apply()
     }
