@@ -100,7 +100,7 @@ fun EnsoScreen(
     var paintingOpen by remember { mutableStateOf(false) }
     var circleBounds by remember { mutableStateOf<Rect?>(null) }
     val context = LocalContext.current
-    val imageStore = remember(context) { EnsoImageStore(context) }
+    val imageStore = remember(context) { EnsoImageStore(context.applicationContext) }
     var customEnso by remember { mutableStateOf<ImageBitmap?>(null) }
     var customFrameScale by remember { mutableFloatStateOf(1f) }
     var viewSize by remember { mutableStateOf(IntSize.Zero) }

@@ -256,6 +256,9 @@ Respect all system insets.
 
 # 10. Main Screen
 
+The app is portrait-only: the activity is locked to portrait orientation and landscape is not
+supported. All layouts must work within the portrait viewport.
+
 The main screen should contain only what is necessary.
 
 Primary elements:
@@ -1556,7 +1559,7 @@ Show only v plus the build version at the left of the Settings header; omit the 
 
 The painter uses ink icons for close, a flowing swash for brush settings, reset, a trash can for
 removing the custom Enso/restoring the standard, and a checkmark for save/apply. The brush controls
-use a stable full-screen view with all seven controls, two columns in landscape, no draggable sheet
+use a stable full-screen view with all seven controls in one column, no draggable sheet
 or scrolling. Close is an ink X; Defaults and Copy values remain text actions.
 
 Use the native OS launch splash with the standard Enso at the largest safe icon size and no

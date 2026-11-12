@@ -67,4 +67,5 @@ Instrumented tests need Enso in the foreground. If `EnsoSmokeTest` fails with `A
 - Gong recordings live in `app/src/main/res/raw`; generated ink control icons live in `app/src/main/res/drawable-nodpi`. See [docs/ARTWORK.md](docs/ARTWORK.md).
 - Timer behaviour is a deterministic state machine driven by `elapsedRealtime()`; preserve the existing persistence and restoration semantics. Reboot continuation is intentionally unsupported.
 - The UI intentionally stays in the warm washi/paper theme regardless of system dark mode.
+- Accessibility is out of scope: Enso is a private hobby app for the author and friends. Don't propose or implement accessibility work — screen-reader semantics, contrast ratios, touch-target minimums, font-scaling support — unless explicitly asked.
 - Tests: `TimerEngineTest`, `CircleRotationTest` and `SayingsTest` run on the JVM; `EnsoSmokeTest` and `EnsoArtworkStoreTest` are instrumented.

@@ -55,7 +55,6 @@ internal fun InkPainterIcon(symbol: PainterSymbol, label: String, enabled: Boole
                 line(9f, listOf(p(34, 33), p(63, 64), p(92, 95)))
                 line(8f, listOf(p(94, 32), p(64, 65), p(33, 94)))
             }
-            PainterSymbol.Brush -> Unit
             PainterSymbol.Apply -> line(13f, listOf(p(24, 64), p(49, 89), p(99, 34)))
             PainterSymbol.Trash -> {
                 line(8f, listOf(p(29, 40), p(100, 40)))
@@ -64,6 +63,7 @@ internal fun InkPainterIcon(symbol: PainterSymbol, label: String, enabled: Boole
                 line(6f, listOf(p(56, 53), p(58, 88)))
                 line(6f, listOf(p(75, 53), p(73, 88)))
             }
+            else -> Unit // Brush returns above; handled by its own icon.
         }
         renderSumiImage(strokes, 128, 1f).asImageBitmap()
     }

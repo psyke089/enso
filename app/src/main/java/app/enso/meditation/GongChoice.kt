@@ -17,11 +17,11 @@ enum class GongChoice(val resourceName: String, @StringRes val labelRes: Int) {
     Crown("gong_crown", R.string.gong_crown),
     Bell("gong_bell", R.string.gong_bell);
 
-    fun next(): GongChoice = values()[(ordinal + 1) % values().size]
+    fun next(): GongChoice = entries[(ordinal + 1) % entries.size]
 
-    fun previous(): GongChoice = values()[(ordinal + values().size - 1) % values().size]
+    fun previous(): GongChoice = entries[(ordinal + entries.size - 1) % entries.size]
 
     companion object {
-        fun fromName(name: String?): GongChoice? = values().firstOrNull { it.name == name }
+        fun fromName(name: String?): GongChoice? = entries.firstOrNull { it.name == name }
     }
 }

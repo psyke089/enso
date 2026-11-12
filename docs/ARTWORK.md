@@ -18,7 +18,7 @@ Use case: stylized-concept. Asset type: production Android meditation timer cont
 
 ### stop
 
-Asset: `app/src/main/res/drawable-nodpi/ink_stop.png`
+Asset: `app/src/main/res/drawable-nodpi/ink_stop.png` (retired; see “Retired source assets”)
 
 Use case: stylized-concept. Asset type: production Android meditation timer control icon, single square image. Style: beautifully hand-drawn Japanese sumi ink on washi, with natural dry brush fibers, softly uneven edges, restrained wabi-sabi craftsmanship. Near-black warm charcoal ink only. Transparent background so the app's own Japanese paper shows through; actual alpha, no white or beige rectangle, no checkerboard painted into the image. Centered mark occupying about 65% of square with generous clear margins. Bold simple silhouette recognizable at 36dp, calm minimal composition. No text, no border, no shadows, no extra decoration. Subject: one filled compact square forming the universal stop symbol; subtly uneven hand-brushed sides and ink wash texture, recognizable square silhouette.
 
@@ -56,12 +56,15 @@ Reset continues to use `ink_reset.png`. Spoken action labels and 48dp touch targ
 
 Brush settings uses the supplied `tmp/brush_settings_sliders.svg`, converted losslessly to
 `app/src/main/res/drawable/ink_brush_settings.xml`, retaining its original paths and even-odd fill.
-The PNG reference is superseded by this SVG.
+The PNG reference is superseded by this SVG. The XML itself was retired later (see “Retired source
+assets”).
 
 The native splash references `drawable-nodpi/native_splash_enso.png` directly. The original
-transparent `enso_splash.png` is trimmed, fitted to 288px and centered on a transparent 432px canvas
-with ImageMagick, preserving alpha and fitting Android's safe icon region. There is no XML icon
-wrapper, in-app splash or artificial delay. Android 13+ uses icon_preferred for warm launches too.
+transparent `enso_splash.png` was trimmed, fitted to 288px and centered on a transparent 432px canvas
+with ImageMagick, preserving alpha and fitting Android's safe icon region. That original source PNG
+was later retired (see “Retired source assets”); `native_splash_enso.png` remains.
+There is no XML icon wrapper, in-app splash or artificial delay. Android 13+ uses icon_preferred
+for warm launches too.
 
 The supplied brush-settings vector keeps its silhouette but is rasterized once at 256px with the
 same seeded ink-grain function used by SumiBrush. Warm charcoal #292823, mottled opacity and dry
@@ -85,6 +88,13 @@ orientation. `enso_icon.xml` fits its transparent foreground into the adaptive i
 region; both the regular and themed/monochrome adaptive icons use this silhouette over the warm
 paper background. Android 7 uses the same PNG in a paper-backed layer list. No new artwork was
 generated, and the splash asset itself is unchanged.
+
+## Retired source assets (2026-11-12)
+
+`drawable-nodpi/enso_splash.png`, `drawable-nodpi/ink_stop.png` and `drawable/ink_brush_settings.xml`
+are unused: painter and settings controls are code-native, and the native splash and launcher use
+`native_splash_enso.png`. They were removed from the source tree; copies are kept in the gitignored
+`tmp/unused-assets/` scratch folder. Their prompts above remain for provenance.
 
 ## Drawing practice paper (2026-11-12)
 
