@@ -116,11 +116,7 @@ jobs:
           name=$(sed -n 's/^val ensoVersionName = "\(.*\)"$/\1/p' app/build.gradle.kts)
           mkdir -p dist
           cp "app/build/outputs/apk/release/enso-$name.apk" "dist/enso-$name.apk"
-          if [ -f "docs/releases/v$name.md" ]; then
-            cp "docs/releases/v$name.md" dist/notes.md
-          else
-            printf 'Enso %s\n' "$name" > dist/notes.md
-          fi
+          printf 'Enso %s\n' "$name" > dist/notes.md
           (cd dist && sha256sum "enso-$name.apk" >"enso-$name.apk.sha256")
           cat "dist/enso-$name.apk.sha256"
       - name: Upload preview artifact
