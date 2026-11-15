@@ -18,14 +18,13 @@
 
 A minimal meditation timer in Kotlin and Jetpack Compose. Android 7.0+ (API 24), portrait-only, entirely offline: no internet permission, accounts, analytics or ads. Behaviour is specified in [SPEC.md](docs/SPEC.md).
 
-## Features
+## What it does
 
-- **Duration by gesture.** Trace the enso clockwise to add time, counterclockwise to remove it: 5 minutes to 24 hours, in adjustable steps of 1, 2, 5, 10 or 15 minutes.
-- **Repetitions.** Tap left or right of the circle to subtract or add one; 0 repeats forever. Brush marks below the circle count down as intervals finish, and the circle shows elapsed / total time (or ∞ for unlimited sessions).
-- **Paint your own enso.** A full-screen sumi canvas with a tunable brush; saved drawings replace the standard artwork. The canvas opens once per day on its own, and Hardcore Mode offers only the checkmark.
-- **Lock-screen timer.** An ongoing notification shows the remaining time and offers pause, resume and stop, so the session survives the phone being put down.
-- **Gongs and sayings.** Separate start, end and repeat gongs from nine bundled bells (previewable in Settings), and twenty original sayings that fade in without immediate repeats.
-- **Quiet controls.** One calm screen for start, pause, resume, reset; hide the time and saying, disable haptics or keep the screen awake. English and German UI.
+**Trace time.** Rotate the ink circle clockwise to add minutes, counterclockwise to take them back: 5 minutes to 24 hours, in steps of 1, 2, 5, 10 or 15. Tap either side of it to set repetitions; zero means it never ends. The circle tracks elapsed against total time, and the marks below fade one by one as intervals pass.
+
+**Paint an enso.** A full-screen sumi canvas with tunable ink, saved over the standard artwork. On a day you have not painted, the canvas opens by itself on your first visit — close it and it waits until tomorrow. Hardcore Mode leaves exactly one way forward: the checkmark.
+
+**Sit with it.** Nine bells for start, end and repeat; twenty sayings that never land back to back; one calm screen for start, pause, resume, reset. The countdown also lives on the lock screen, so the phone can stay down. Hide the clock or the saying, silence the haptics, keep the screen awake. English and German.
 
 ## Install
 
