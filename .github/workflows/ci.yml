@@ -110,13 +110,12 @@ jobs:
           "$aapt2" dump badging app/build/outputs/apk/release/enso-$name.apk |
             grep -q "versionName='$name' " ||
             { echo "::error::APK does not report versionName $name"; exit 1; }
-      - name: Package release asset and notes
+      - name: Package release asset
         run: |
           set -euo pipefail
           name=$(sed -n 's/^val ensoVersionName = "\(.*\)"$/\1/p' app/build.gradle.kts)
           mkdir -p dist
           cp "app/build/outputs/apk/release/enso-$name.apk" "dist/enso-$name.apk"
-          printf 'Enso %s\n' "$name" > dist/notes.md
           (cd dist && sha256sum "enso-$name.apk" >"enso-$name.apk.sha256")
           cat "dist/enso-$name.apk.sha256"
       - name: Upload preview artifact
@@ -130,9 +129,9 @@ jobs:
         if: github.ref_type == 'tag' || inputs.publish == true
         uses: softprops/action-gh-release@v2
         with:
+          generate_release_notes: true
           name: Enso ${{ steps.version.outputs.name }}
           tag_name: ${{ steps.version.outputs.tag }}
-          body_path: dist/notes.md
           prerelease: ${{ contains(steps.version.outputs.tag, '-') }}
           files: |
             dist/*.apk
