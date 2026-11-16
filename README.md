@@ -43,7 +43,9 @@ Release builds are self-signed, so a debug build cannot be installed over one (u
 ./gradlew testDebugUnitTest lintDebug
 ```
 
-`keystore.properties` in the repo root enables release signing; without it the APK is unsigned. See [AGENTS.md](AGENTS.md) for device and instrumented-test commands.
+Release signing reads the `enso.storeFile`, `enso.storePassword`, `enso.keyAlias` and
+`enso.keyPassword` Gradle properties (CI uses the `ENSO_*` environment equivalents); without
+them the APK is unsigned. See [AGENTS.md](AGENTS.md) for the key location and device commands.
 
 ## License
 

@@ -14,16 +14,22 @@ Enso is a private, fully offline Android meditation timer and interval gong, bui
 
 This is a private app that will likely never be published to a real app store. Builds are distributed as APK assets on [GitHub releases](https://github.com/psyke089/enso/releases), not through an app store.
 
-Release signing is configured locally, not in version control. `app/build.gradle.kts` loads the gitignored `keystore.properties` from the repo root when it exists:
+Release signing is configured locally, not in version control. `app/build.gradle.kts` reads
+`enso.storeFile`, `enso.storePassword`, `enso.keyAlias` and `enso.keyPassword` from Gradle
+properties, falling back to the `ENSO_*` environment variables used by CI:
 
 ```properties
-storeFile=/home/psyke/.android/enso-release.jks
-storePassword=…
-keyAlias=enso
-keyPassword=…
+# ~/.gradle/gradle.properties
+enso.storeFile=/home/psyke/.android/keys/enso/enso-release.jks
+enso.storePassword=…
+enso.keyAlias=enso
+enso.keyPassword=…
 ```
 
-Keep the keystore and `keystore.properties` out of the repository. Without that file `assembleRelease` still builds, but produces an unsigned APK; debug builds are unaffected either way.
+Keep the keystore and its passwords out of the repository. Without those values
+`assembleRelease` still builds, but produces an unsigned APK; debug builds are unaffected
+either way. The keystore is the update identity: back it up, because losing it means existing
+installs can never be upgraded in place.
 
 The shipped artifact is the release-signed `app/build/outputs/apk/release/enso-<versionName>.apk`. `app-debug.apk` is only for local installs and device testing, and it cannot replace an installed release-signed copy (signature mismatch) — uninstall first when switching.
 
@@ -64,8 +70,10 @@ Instrumented tests need Enso in the foreground. If `EnsoSmokeTest` fails with `A
 ## Conventions
 
 - Keep the app fully offline: no `INTERNET` permission, accounts, analytics, ads or remote assets.
+- Product behaviour and visuals are specified in [SPEC.md](docs/SPEC.md); change the spec before
+  changing behaviour. Preserve the timer architecture and its persistence/restoration semantics
+  (SPEC: Timer Architecture, Missed Intervals and Restoration) and the fixed paper theme that
+  never follows system dark mode (SPEC: Theme).
 - Gong recordings live in `app/src/main/res/raw`; generated ink control icons live in `app/src/main/res/drawable-nodpi`. See [docs/ARTWORK.md](docs/ARTWORK.md).
-- Timer behaviour is a deterministic state machine driven by `elapsedRealtime()`; preserve the existing persistence and restoration semantics. Reboot continuation is intentionally unsupported.
-- The UI intentionally stays in the warm washi/paper theme regardless of system dark mode.
 - Accessibility is out of scope: Enso is a private hobby app for the author and friends. Don't propose or implement accessibility work — screen-reader semantics, contrast ratios, touch-target minimums, font-scaling support — unless explicitly asked.
 - Tests: `TimerEngineTest`, `CircleRotationTest` and `SayingsTest` run on the JVM; `EnsoSmokeTest` and `EnsoArtworkStoreTest` are instrumented.

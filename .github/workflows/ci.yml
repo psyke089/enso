@@ -81,12 +81,14 @@ jobs:
           done
           keystore="$RUNNER_TEMP/enso-release.jks"
           printf '%s' "$KEYSTORE_B64" | base64 -d > "$keystore"
+          # Signing values reach the build through the environment; nothing is written
+          # into the checkout.
           {
-            printf 'storeFile=%s\n' "$keystore"
-            printf 'storePassword=%s\n' "$STORE_PASSWORD"
-            printf 'keyAlias=%s\n' "$KEY_ALIAS"
-            printf 'keyPassword=%s\n' "$KEY_PASSWORD"
-          } > keystore.properties
+            printf 'ENSO_STORE_FILE=%s\n' "$keystore"
+            printf 'ENSO_STORE_PASSWORD=%s\n' "$STORE_PASSWORD"
+            printf 'ENSO_KEY_ALIAS=%s\n' "$KEY_ALIAS"
+            printf 'ENSO_KEY_PASSWORD=%s\n' "$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
       - name: Build, test and lint
         run: ./gradlew --no-daemon testDebugUnitTest lintDebug assembleRelease
       - name: Assert the APK keeps the release signature
