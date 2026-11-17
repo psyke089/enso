@@ -37,7 +37,10 @@ The shipped artifact is the release-signed `app/build/outputs/apk/release/enso-<
 
 - Bump `ensoVersionCode` (integer, +1 per release) and `ensoVersionName` (semver) at the top of `app/build.gradle.kts`, and update the release badge in `README.md`.
 - Tags are annotated `vX.Y.Z`; release titles are `Enso X.Y.Z`. The workflow attaches the signed APK, its sha256 and GitHub-generated notes; edit the notes on the release afterwards for highlights and known limits.
-- `origin` pushes to GitHub (`psyke089/enso`) and a private mirror; a plain `git push origin main --follow-tags` updates both.
+- `origin` is Codeberg (canonical, private); `github` is the public mirror (`psyke089/enso`) and
+  the release host. `./tools/sync` pushes `main` and the release tag at HEAD to both, in their own
+  pushes so the `v*` release run fires. Never force `github`: divergence is an error, not something to paper over.
+  GitHub PRs are read-only; apply patches locally and push through `origin`.
 
 ## Build, test and run
 
