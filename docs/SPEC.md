@@ -724,6 +724,13 @@ Prefer reconstructable state over frequent storage writes.
 
 Enso uses local audio assets.
 
+Gongs use the system alarm audio channel. Settings provides one Enso-only Gong Volume
+control from 0 to 100%, default 100%, persisted locally and shared by start, end,
+interval and preview playback. Apply volume changes to a currently playing gong without
+restarting it. Never change the system alarm volume; it remains the upper limit, and
+a muted system alarm channel also mutes Enso. Keep preview playback on the existing gong
+names only. Moving the slider alone must not start audio.
+
 Logical sounds:
 
 - Start Gong
@@ -792,19 +799,21 @@ Ensure completion events are consumed exactly once.
 
 Settings should be accessible through one discreet control.
 
-Prefer:
+Use a single full-screen paper / ink view with a fixed header (version left, close right)
+and a scrollable settings body. Back and Close return to the timer. Do not use a draggable
+sheet, dimmed backdrop or nested settings pages. Keep the existing timer session running
+and apply and persist changes immediately, without a Save button.
 
-- compact bottom sheet
-- lightweight dialog
-- similarly minimal interaction
-
-over a deep navigation hierarchy.
+Use a plain list without section headings or explanatory text. Label the volume row
+"Volume" in English and "Lautstärke" in German, with the slider to the right of the label.
+Do not show a percentage or a separate volume preview button.
 
 Settings:
 
 - Start Gong
 - End Gong
 - Repeat Gong (sound only)
+- Gong Volume (Enso only, 0–100%)
 - Keep Screen Awake
 - Vibration
 - Haptic Feedback (selection sound and vibration)
@@ -830,6 +839,7 @@ Suggested defaults:
 - End Gong: ON
 - repetition count: 1 (unlimited mode OFF)
 - Repeat Gong: ON
+- Gong Volume: 100%
 - Keep Screen Awake: ON
 - Vibration: OFF
 - Haptic Feedback: ON

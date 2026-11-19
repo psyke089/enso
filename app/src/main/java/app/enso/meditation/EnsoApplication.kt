@@ -90,7 +90,8 @@ class SessionController(application: Application) {
             events.forEach { event ->
                 when (event) {
                     TimerEvent.SelectionTick -> Unit
-                    TimerEvent.StartGong -> audio.play(engine.snapshot.settings.startGongSound)
+                    TimerEvent.StartGong -> audio.play(engine.snapshot.settings.startGongSound,
+                        engine.snapshot.settings.gongVolumePercent)
                     is TimerEvent.IntervalCompleted -> {
                         if (event.gong) {
                             val settings = engine.snapshot.settings
@@ -98,7 +99,7 @@ class SessionController(application: Application) {
                             val sound = if (engine.snapshot.session != null) {
                                 settings.middleGongSound
                             } else settings.endGongSound
-                            audio.play(sound)
+                            audio.play(sound, settings.gongVolumePercent)
                         }
                         if (event.vibrate) audio.vibrate()
                     }
@@ -120,7 +121,12 @@ class SessionController(application: Application) {
     suspend fun onLaunch() = mutate { refreshSaying(); emptyList() }
 
     /** Plays a single recording so settings can be chosen by ear; never touches session state. */
-    fun previewGong(choice: GongChoice) { audio.play(choice) }
+    fun previewGong(choice: GongChoice) {
+        scope.launch {
+            initialized.await()
+            mutex.withLock { audio.play(choice, engine.snapshot.settings.gongVolumePercent) }
+        }
+    }
 
     fun changeSettings(change: (EnsoSettings) -> EnsoSettings) {
         scope.launch { mutate {
@@ -132,6 +138,8 @@ class SessionController(application: Application) {
                 !next.hardcoreMode -> next.copy(hardcorePending = false)
                 else -> next
             })
+            if (snapshot.settings.gongVolumePercent != previous.gongVolumePercent)
+                audio.setVolume(snapshot.settings.gongVolumePercent)
             emptyList()
         } }
     }

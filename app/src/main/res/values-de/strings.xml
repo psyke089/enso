@@ -8,6 +8,7 @@
     <string name="storage_warning">Änderungen konnten auf diesem Gerät nicht gespeichert werden.</string>
 
     <string name="settings">Einstellungen</string>
+    <string name="gong_volume">Lautstärke</string>
     <string name="close_settings">Einstellungen schließen</string>
     <string name="app_version">App-Version %1$s</string>
     <string name="version_label">v%1$s</string>

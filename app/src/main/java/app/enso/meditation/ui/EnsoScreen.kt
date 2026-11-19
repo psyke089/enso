@@ -12,7 +12,6 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -23,20 +22,19 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.draggable
-import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -283,18 +281,12 @@ fun EnsoScreen(
                 exit = fadeOut(tween(300)) + slideOutVertically(tween(360)) { it / 20 },
             ) {
                 BackHandler { settingsOpen = false }
-                Box(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxSize().background(Ink.copy(alpha = .20f))
-                        .clickable(interactionSource = remember { MutableInteractionSource() },
-                            indication = null) { settingsOpen = false })
-                    SettingsPanel(
-                        settings = state.settings,
-                        changeSettings = changeSettings,
-                        previewGong = previewGong,
-                        onDone = { settingsOpen = false },
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    )
-                }
+                SettingsPanel(
+                    settings = state.settings,
+                    changeSettings = changeSettings,
+                    previewGong = previewGong,
+                    onDone = { settingsOpen = false },
+                )
             }
         }
         if (paintingOpen || (!launchComplete && launchToPainter)) circleBounds?.let { bounds ->
@@ -670,120 +662,126 @@ private fun CircleInput(state: TimerUiState, duration: (Int) -> Unit, repetition
     }
 }
 
-/** Bottom sheet of settings painted as a sheet of paper rather than a Material card. */
+/** Full-screen paper with a fixed header and one scrollable settings page. */
 @Composable
 private fun SettingsPanel(
     settings: EnsoSettings,
     changeSettings: ((EnsoSettings) -> EnsoSettings) -> Unit,
     previewGong: (GongChoice) -> Unit,
     onDone: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    val dragOffset = remember { Animatable(0f) }
-    val scope = rememberCoroutineScope()
-    val dragThreshold = with(LocalDensity.current) { 120.dp.toPx() }
-    Column(modifier.offset { IntOffset(0, dragOffset.value.roundToInt()) }
-        .fillMaxWidth().background(Paper)
-        .navigationBarsPadding()
-        .verticalScroll(rememberScrollState())
-        .padding(start = 28.dp, end = 28.dp, bottom = 26.dp)) {
-        Box(Modifier.fillMaxWidth().height(30.dp)
-            .draggable(
-                state = rememberDraggableState { delta ->
-                    scope.launch { dragOffset.snapTo((dragOffset.value + delta).coerceAtLeast(0f)) }
-                },
-                orientation = Orientation.Vertical,
-                onDragStopped = { velocity ->
-                    if (dragOffset.value > dragThreshold || velocity > 900f) onDone()
-                    else dragOffset.animateTo(0f, spring())
-                },
-            ),
-            contentAlignment = Alignment.Center) {
-            Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp))
-                .background(Ink.copy(alpha = .3f)))
+    Box(Modifier.fillMaxSize().background(Paper).pointerInput(Unit) {
+        // Consume the settings surface so empty paper never operates the timer underneath.
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false)
+            do { val event = awaitPointerEvent() } while (event.changes.any { it.pressed })
         }
-        val versionText = stringResource(R.string.version_label, BuildConfig.VERSION_NAME)
-        val versionDescription = stringResource(R.string.app_version, BuildConfig.VERSION_NAME)
-        val closeLabel = stringResource(R.string.close_settings)
-        Row(Modifier.fillMaxWidth().padding(bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Text(versionText, color = FadedInk.copy(alpha = .65f), fontFamily = FontFamily.Serif,
-                fontSize = 12.sp, modifier = Modifier.weight(1f)
-                    .semantics { contentDescription = versionDescription })
-            Box(Modifier.size(44.dp).offset(x = 7.dp).clip(CircleShape)
-                .clickable(interactionSource = remember { MutableInteractionSource() },
-                    indication = null, onClick = onDone)
-                .semantics { contentDescription = closeLabel },
-                contentAlignment = Alignment.Center) {
-                Text("\u00D7", color = FadedInk.copy(alpha = .65f), fontSize = 24.sp)
+    }) {
+        WashiBackground(Modifier.matchParentSize())
+        Column(Modifier.fillMaxSize().safeDrawingPadding().padding(horizontal = 28.dp)) {
+            val versionText = stringResource(R.string.version_label, BuildConfig.VERSION_NAME)
+            val versionDescription = stringResource(R.string.app_version, BuildConfig.VERSION_NAME)
+            val closeLabel = stringResource(R.string.close_settings)
+            Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(versionText, color = FadedInk.copy(alpha = .65f), fontFamily = FontFamily.Serif,
+                    fontSize = 12.sp, modifier = Modifier.weight(1f)
+                        .semantics { contentDescription = versionDescription })
+                Box(Modifier.size(44.dp).offset(x = 7.dp).clip(CircleShape)
+                    .clickable(interactionSource = remember { MutableInteractionSource() },
+                        indication = null, onClick = onDone)
+                    .semantics { contentDescription = closeLabel },
+                    contentAlignment = Alignment.Center) {
+                    Text("\u00D7", color = FadedInk.copy(alpha = .65f), fontSize = 24.sp)
+                }
+            }
+            Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
+                .padding(bottom = 28.dp)) {
+                Setting(stringResource(R.string.start_gong), settings.startGong,
+                    gong = settings.startGongSound,
+                    onGong = { choice ->
+                        changeSettings { it.copy(startGong = true, startGongSound = choice) }
+                        previewGong(choice)
+                    },
+                    onPreview = previewGong) { value ->
+                    changeSettings { it.copy(startGong = value) }
+                }
+                Setting(stringResource(R.string.end_gong), settings.endGong,
+                    gong = settings.endGongSound,
+                    onGong = { choice ->
+                        changeSettings { it.copy(endGong = true, endGongSound = choice) }
+                        previewGong(choice)
+                    },
+                    onPreview = previewGong) { value ->
+                    changeSettings { it.copy(endGong = value) }
+                }
+                Setting(stringResource(R.string.repeat_gong), settings.repeatGong,
+                    gong = settings.middleGongSound,
+                    onGong = { choice ->
+                        changeSettings { it.copy(repeatGong = true, middleGongSound = choice) }
+                        previewGong(choice)
+                    },
+                    onPreview = previewGong) { value ->
+                    changeSettings { it.copy(repeatGong = value) }
+                }
+                GongVolume(settings.gongVolumePercent,
+                    onChange = { value -> changeSettings { it.copy(gongVolumePercent = value) } })
+                Setting(stringResource(R.string.vibration), settings.vibration) { value ->
+                    changeSettings { it.copy(vibration = value) }
+                }
+                val stepMinutes = settings.rotationStepMinutes
+                val stepLabel = stringResource(R.string.minutes_per_step)
+                val stepValue = stringResource(R.string.minutes_short, stepMinutes)
+                val stepDescription = pluralStringResource(R.plurals.minutes_per_rotation_step, stepMinutes, stepMinutes)
+                val smallerStep = stringResource(R.string.smaller_minute_step)
+                val largerStep = stringResource(R.string.larger_minute_step)
+                Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stepLabel, color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif,
+                        modifier = Modifier.weight(1f).padding(end = 12.dp))
+                    val index = ROTATION_STEP_OPTIONS.indexOf(settings.rotationStepMinutes).coerceAtLeast(0)
+                    fun select(offset: Int) {
+                        val next = (index + offset + ROTATION_STEP_OPTIONS.size) % ROTATION_STEP_OPTIONS.size
+                        changeSettings { it.copy(rotationStepMinutes = ROTATION_STEP_OPTIONS[next]) }
+                    }
+                    PickerArrow("‹", smallerStep) { select(-1) }
+                    Text(stepValue, fontFamily = FontFamily.Serif, color = Ink,
+                        textAlign = TextAlign.Center, modifier = Modifier.width(56.dp).semantics {
+                            contentDescription = stepDescription
+                        })
+                    PickerArrow("›", largerStep) { select(1) }
+                }
+                Setting(stringResource(R.string.haptic_feedback), settings.hapticFeedback) { value ->
+                    changeSettings { it.copy(hapticFeedback = value) }
+                }
+                Setting(stringResource(R.string.keep_screen_awake), settings.keepScreenAwake) { value ->
+                    changeSettings { it.copy(keepScreenAwake = value) }
+                }
+                Setting(stringResource(R.string.show_time), settings.showTime) { value ->
+                    changeSettings { it.copy(showTime = value) }
+                }
+                Setting(stringResource(R.string.show_saying), settings.showSaying) { value ->
+                    changeSettings { it.copy(showSaying = value) }
+                }
+                Setting(stringResource(R.string.hardcore_mode), settings.hardcoreMode) { value ->
+                    changeSettings { it.copy(hardcoreMode = value) }
+                }
             }
         }
-        val stepMinutes = settings.rotationStepMinutes
-        val stepLabel = stringResource(R.string.minutes_per_step)
-        val stepValue = stringResource(R.string.minutes_short, stepMinutes)
-        val stepDescription = pluralStringResource(R.plurals.minutes_per_rotation_step, stepMinutes, stepMinutes)
-        val smallerStep = stringResource(R.string.smaller_minute_step)
-        val largerStep = stringResource(R.string.larger_minute_step)
-        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(stepLabel, color = Ink, fontSize = 16.sp, fontFamily = FontFamily.Serif,
-                modifier = Modifier.weight(1f).padding(end = 12.dp))
-            val index = ROTATION_STEP_OPTIONS.indexOf(settings.rotationStepMinutes).coerceAtLeast(0)
-            fun select(offset: Int) {
-                val next = (index + offset + ROTATION_STEP_OPTIONS.size) % ROTATION_STEP_OPTIONS.size
-                changeSettings { it.copy(rotationStepMinutes = ROTATION_STEP_OPTIONS[next]) }
-            }
-            PickerArrow("‹", smallerStep) { select(-1) }
-            Text(stepValue, fontFamily = FontFamily.Serif, color = Ink,
-                textAlign = TextAlign.Center, modifier = Modifier.width(56.dp).semantics {
-                    contentDescription = stepDescription
-                })
-            PickerArrow("›", largerStep) { select(1) }
-        }
-        Setting(stringResource(R.string.haptic_feedback), settings.hapticFeedback) { value ->
-            changeSettings { it.copy(hapticFeedback = value) }
-        }
-        Setting(stringResource(R.string.start_gong), settings.startGong,
-            gong = settings.startGongSound,
-            onGong = { choice ->
-                changeSettings { it.copy(startGong = true, startGongSound = choice) }
-                previewGong(choice)
-            },
-            onPreview = previewGong) { value ->
-            changeSettings { it.copy(startGong = value) }
-        }
-        Setting(stringResource(R.string.end_gong), settings.endGong,
-            gong = settings.endGongSound,
-            onGong = { choice ->
-                changeSettings { it.copy(endGong = true, endGongSound = choice) }
-                previewGong(choice)
-            },
-            onPreview = previewGong) { value ->
-            changeSettings { it.copy(endGong = value) }
-        }
-        Setting(stringResource(R.string.repeat_gong), settings.repeatGong,
-            gong = settings.middleGongSound,
-            onGong = { choice ->
-                changeSettings { it.copy(repeatGong = true, middleGongSound = choice) }
-                previewGong(choice)
-            },
-            onPreview = previewGong) { value ->
-            changeSettings { it.copy(repeatGong = value) }
-        }
-        Setting(stringResource(R.string.keep_screen_awake), settings.keepScreenAwake) { value ->
-            changeSettings { it.copy(keepScreenAwake = value) }
-        }
-        Setting(stringResource(R.string.vibration), settings.vibration) { value ->
-            changeSettings { it.copy(vibration = value) }
-        }
-        Setting(stringResource(R.string.show_time), settings.showTime) { value ->
-            changeSettings { it.copy(showTime = value) }
-        }
-        Setting(stringResource(R.string.show_saying), settings.showSaying) { value ->
-            changeSettings { it.copy(showSaying = value) }
-        }
-        Setting(stringResource(R.string.hardcore_mode), settings.hardcoreMode) { value ->
-            changeSettings { it.copy(hardcoreMode = value) }
-        }
+    }
+}
+
+@Composable
+private fun GongVolume(percent: Int, onChange: (Int) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(stringResource(R.string.gong_volume), color = Ink, fontSize = 16.sp,
+            fontFamily = FontFamily.Serif, modifier = Modifier.weight(1f).padding(end = 12.dp))
+        Slider(value = percent.toFloat(), onValueChange = { onChange(it.roundToInt()) },
+            valueRange = 0f..100f, steps = 99,
+            colors = SliderDefaults.colors(thumbColor = Ink,
+                activeTrackColor = FadedInk.copy(alpha = .65f),
+                inactiveTrackColor = FadedInk.copy(alpha = .16f),
+                activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent),
+            modifier = Modifier.width(202.dp).height(40.dp).testTag("Gong volume"))
     }
 }
 

@@ -7,7 +7,7 @@
 <p align="center">A quiet, offline meditation timer and interval gong for Android.</p>
 
 <p align="center">
-  <a href="https://github.com/psyke089/enso/releases"><img src="https://img.shields.io/badge/release-v1.7.0-blue?logo=github&logoColor=white" alt="Release v1.7.0"></a>
+  <a href="https://github.com/psyke089/enso/releases"><img src="https://img.shields.io/badge/release-v1.7.1-blue?logo=github&logoColor=white" alt="Release v1.7.1"></a>
   <img src="https://img.shields.io/badge/vibe_coded-100%25-critical?logo=github&logoColor=white" alt="No human review">
   <img src="https://img.shields.io/badge/human_review-none-green?logo=github&logoColor=white" alt="Human review: none">
 </p>
@@ -31,7 +31,7 @@ A minimal meditation timer in Kotlin and Jetpack Compose. Android 7.0+ (API 24),
 Grab the signed APK from [releases](https://github.com/psyke089/enso/releases) and open it on the phone, or:
 
 ```sh
-adb install -r enso-1.7.0.apk
+adb install -r enso-1.7.1.apk
 ```
 
 Release builds are self-signed, so a debug build cannot be installed over one (uninstall first).
@@ -39,7 +39,7 @@ Release builds are self-signed, so a debug build cannot be installed over one (u
 ## Build
 
 ```sh
-./gradlew assembleRelease   # app/build/outputs/apk/release/enso-1.7.0.apk
+./gradlew assembleRelease   # app/build/outputs/apk/release/enso-1.7.1.apk
 ./gradlew testDebugUnitTest lintDebug
 ```
 

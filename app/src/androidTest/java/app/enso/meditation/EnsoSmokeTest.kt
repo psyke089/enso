@@ -196,6 +196,43 @@ class EnsoSmokeTest {
         }
     }
 
+    @Test fun fullScreenSettingsPersistEnsoVolumeWithoutChangingSystemAlarmOrSession() {
+        awaitState { it.ready }
+        val audio = compose.activity.getSystemService(android.media.AudioManager::class.java)
+        val alarmVolume = audio.getStreamVolume(android.media.AudioManager.STREAM_ALARM)
+        val original = runBlocking { EnsoStore(compose.activity).load() }
+        compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
+        val close = compose.onNodeWithContentDescription(str(R.string.close_settings))
+        val headerBounds = close.fetchSemanticsNode().boundsInRoot
+        val slider = compose.onNodeWithTag("Gong volume")
+        for (percent in listOf(35, 0, 100, 35)) {
+            slider.performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(percent.toFloat()) }
+            awaitState { it.settings.gongVolumePercent == percent }
+            assertEquals(percent, runBlocking { EnsoStore(compose.activity).load() }.settings.gongVolumePercent)
+            assertEquals(alarmVolume, audio.getStreamVolume(android.media.AudioManager.STREAM_ALARM))
+            // Existing gong-name previews also respect Enso mute without editing the stream.
+            if (percent == 0) compose.onNodeWithContentDescription(
+                str(R.string.preview_gong, str(state.settings.startGongSound.labelRes))).performClick()
+        }
+        compose.onNodeWithText(str(R.string.hardcore_mode)).performScrollTo().assertIsDisplayed()
+        close.assertIsDisplayed()
+        assertEquals(headerBounds, close.fetchSemanticsNode().boundsInRoot)
+        compose.activityRule.scenario.recreate()
+        awaitState { it.settings.gongVolumePercent == 35 }
+        compose.onNodeWithContentDescription(str(R.string.close_settings)).assertIsDisplayed()
+        slider.performScrollTo().assert(SemanticsMatcher.expectValue(
+            SemanticsProperties.ProgressBarRangeInfo,
+            androidx.compose.ui.semantics.ProgressBarRangeInfo(35f, 0f..100f, 99)))
+        androidx.test.espresso.Espresso.pressBack()
+        compose.onNodeWithTag("Gong volume").assertDoesNotExist()
+        val saved = runBlocking { EnsoStore(compose.activity).load() }
+        assertEquals(original.session, saved.session)
+        assertEquals(original.selectedMs, saved.selectedMs)
+        assertEquals(original.repeatCount, saved.repeatCount)
+        assertEquals(original.repeatForever, saved.repeatForever)
+        assertEquals(alarmVolume, audio.getStreamVolume(android.media.AudioManager.STREAM_ALARM))
+    }
+
     @Test fun durationSettingsAndSessionLifecycle() {
         awaitState { it.ready }
         assertEquals(TimerPhase.Idle, state.phase)
@@ -213,7 +250,7 @@ class EnsoSmokeTest {
             awaitState { it.selectedMs == original.selectedMs }
 
             compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
-            compose.onNodeWithText(str(R.string.minutes_per_step)).assertIsDisplayed()
+            compose.onNodeWithText(str(R.string.minutes_per_step)).performScrollTo().assertIsDisplayed()
             compose.onNodeWithContentDescription(str(R.string.smaller_minute_step)).performClick()
             awaitState { it.settings.rotationStepMinutes == 2 }
             assertEquals(2, runBlocking { EnsoStore(compose.activity).load() }.settings.rotationStepMinutes)
@@ -227,9 +264,10 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription(quantity(R.plurals.minutes_per_rotation_step, 2, 2)).assertIsDisplayed()
             compose.onNodeWithContentDescription(str(R.string.larger_minute_step)).performClick()
             awaitState { it.settings.rotationStepMinutes == 5 }
-            compose.onNodeWithText(str(R.string.vibration)).assertIsDisplayed()
+            compose.onNodeWithText(str(R.string.vibration)).performScrollTo().assertIsDisplayed()
             compose.onNodeWithContentDescription(str(R.string.close_settings)).assertIsDisplayed()
             // Tap the label itself; the merged row's center overlaps the sound-preview control.
+            compose.onNodeWithText(str(R.string.repeat_gong)).performScrollTo()
             compose.onNodeWithText(str(R.string.repeat_gong), useUnmergedTree = true).performClick()
             awaitState { it.settings.repeatGong != original.settings.repeatGong }
             assertEquals(original.repeatCount, state.repeatCount)
@@ -248,7 +286,7 @@ class EnsoSmokeTest {
             awaitState { it.settings.showTime }
             compose.onNodeWithText(str(R.string.show_saying)).performScrollTo().performClick()
             awaitState { !it.settings.showSaying }
-            compose.onNodeWithText(str(R.string.vibration)).performClick()
+            compose.onNodeWithText(str(R.string.vibration)).performScrollTo().performClick()
             awaitState { it.settings.vibration != original.settings.vibration }
             val saved = runBlocking { EnsoStore(compose.activity).load() }
             assertEquals(state.settings, saved.settings)
@@ -517,8 +555,8 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription(str(R.string.close_painting)).performClick()
             compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
             compose.onNodeWithContentDescription(str(R.string.app_version, BuildConfig.VERSION_NAME))
-                .performScrollTo().assertIsDisplayed()
-            compose.onNodeWithContentDescription(str(R.string.close_settings)).performScrollTo().performClick()
+                .assertIsDisplayed()
+            compose.onNodeWithContentDescription(str(R.string.close_settings)).performClick()
         } finally { store.save(original) }
     }
 
@@ -641,6 +679,11 @@ class EnsoSmokeTest {
         try {
             // Exercise migration dates without changing an already committed artwork record.
             android.util.AtomicFile(java.io.File(compose.activity.filesDir, "painted_enso.dat")).delete()
+            // Legacy dates are read only alongside an actual legacy image, not preferences alone.
+            java.io.File(compose.activity.filesDir, "painted_enso.png").outputStream().use { output ->
+                android.graphics.Bitmap.createBitmap(2, 2, android.graphics.Bitmap.Config.ARGB_8888)
+                    .compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)
+            }
             // A dismissed invitation still opens the canvas, because hardcore has no dismissal.
             preferences.edit().putLong("last_drawn_at", 0L)
                 .putLong("last_dismissed_at", System.currentTimeMillis()).commit()
@@ -659,7 +702,7 @@ class EnsoSmokeTest {
             assertTrue(enabledSettings.hardcoreMode)
             assertTrue(enabledSettings.hardcorePending)
             assertTrue(imageStore.shouldOpenPainter(true, pending = enabledSettings.hardcorePending))
-            compose.onNodeWithContentDescription(str(R.string.close_settings)).performScrollTo().performClick()
+            compose.onNodeWithContentDescription(str(R.string.close_settings)).performClick()
 
             // Closing settings hands straight over to the single canvas of the day.
             compose.waitUntil(5_000) {
@@ -715,7 +758,7 @@ class EnsoSmokeTest {
             compose.onNodeWithContentDescription(str(R.string.settings)).performClick()
             compose.onNodeWithText(str(R.string.hardcore_mode)).performScrollTo().performClick()
             awaitState { !it.settings.hardcoreMode }
-            compose.onNodeWithContentDescription(str(R.string.close_settings)).performScrollTo().performClick()
+            compose.onNodeWithContentDescription(str(R.string.close_settings)).performClick()
             compose.onNodeWithContentDescription(str(R.string.paint_enso)).assertIsDisplayed().performClick()
             compose.onNodeWithContentDescription(str(R.string.close_painting)).assertIsDisplayed()
             compose.onNodeWithContentDescription(str(R.string.brush_settings)).assertIsDisplayed()

@@ -3,8 +3,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val ensoVersionCode = 14
-val ensoVersionName = "1.7.0"
+val ensoVersionCode = 15
+val ensoVersionName = "1.7.1"
 
 // Signing stays optional so debug builds work without a local keystore.
 // Values come from ~/.gradle/gradle.properties (enso.*) or the CI environment.

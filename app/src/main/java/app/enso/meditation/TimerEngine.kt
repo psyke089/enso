@@ -25,6 +25,7 @@ data class EnsoSettings(
     val hapticFeedback: Boolean = true,
     val hardcoreMode: Boolean = false,
     val hardcorePending: Boolean = false,
+    val gongVolumePercent: Int = 100,
 )
 
 enum class TimerPhase { Idle, Running, Paused }
@@ -226,6 +227,7 @@ fun formatTime(milliseconds: Long): String {
 }
 
 private fun normalizeSettings(settings: EnsoSettings) = settings.copy(
+    gongVolumePercent = settings.gongVolumePercent.coerceIn(0, 100),
     rotationStepMinutes = settings.rotationStepMinutes.takeIf { it in ROTATION_STEP_OPTIONS }
         ?: DEFAULT_ROTATION_STEP_MINUTES,
 )

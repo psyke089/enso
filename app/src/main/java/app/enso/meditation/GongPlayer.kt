@@ -28,7 +28,7 @@ class GongPlayer(private val context: Context) {
     }
 
     @Suppress("DEPRECATION")
-    fun play(sound: GongChoice) {
+    fun play(sound: GongChoice, volumePercent: Int) {
         val id = sound.soundRes
         stop()
         try {
@@ -43,6 +43,7 @@ class GongPlayer(private val context: Context) {
             val next = MediaPlayer()
             player = next
             next.setAudioAttributes(attributes)
+            setVolume(volumePercent)
             next.setWakeMode(context, PowerManager.PARTIAL_WAKE_LOCK)
             context.resources.openRawResourceFd(id).use { asset ->
                 next.setDataSource(asset.fileDescriptor, asset.startOffset, asset.length)
@@ -59,6 +60,12 @@ class GongPlayer(private val context: Context) {
             Log.w("Enso", "Gong unavailable", e)
             stop()
         }
+    }
+
+    /** Per-player gain only; never changes the device's shared alarm volume. */
+    fun setVolume(volumePercent: Int) {
+        val gain = volumePercent.coerceIn(0, 100) / 100f
+        player?.setVolume(gain, gain)
     }
 
     @Suppress("DEPRECATION")

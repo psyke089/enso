@@ -26,6 +26,7 @@ private object Keys {
     val startSound = stringPreferencesKey("start_gong_sound")
     val endSound = stringPreferencesKey("end_gong_sound")
     val middleSound = stringPreferencesKey("middle_gong_sound")
+    val gongVolume = intPreferencesKey("gong_volume_percent")
     val hapticFeedback = booleanPreferencesKey("haptic_feedback")
     val showTime = booleanPreferencesKey("show_time")
     val showSaying = booleanPreferencesKey("show_saying")
@@ -53,6 +54,7 @@ internal fun settingsFrom(p: Preferences): EnsoSettings {
         startGongSound = GongChoice.fromName(p[Keys.startSound]) ?: defaults.startGongSound,
         endGongSound = GongChoice.fromName(p[Keys.endSound]) ?: defaults.endGongSound,
         middleGongSound = GongChoice.fromName(p[Keys.middleSound]) ?: defaults.middleGongSound,
+        gongVolumePercent = (p[Keys.gongVolume] ?: defaults.gongVolumePercent).coerceIn(0, 100),
         showSaying = p[Keys.showSaying] ?: defaults.showSaying,
         rotationStepMinutes = p[Keys.rotationStep]?.takeIf { it in ROTATION_STEP_OPTIONS }
             ?: defaults.rotationStepMinutes,
@@ -95,6 +97,7 @@ class EnsoStore(private val context: Context) {
             p[Keys.startSound] = snapshot.settings.startGongSound.name
             p[Keys.endSound] = snapshot.settings.endGongSound.name
             p[Keys.middleSound] = snapshot.settings.middleGongSound.name
+            p[Keys.gongVolume] = snapshot.settings.gongVolumePercent
             p[Keys.hapticFeedback] = snapshot.settings.hapticFeedback
             p[Keys.showTime] = snapshot.settings.showTime
             p[Keys.showSaying] = snapshot.settings.showSaying
